@@ -7,8 +7,6 @@ use mpp_parameter_mod,      only: EUPDATE, WUPDATE, SUPDATE, NUPDATE
 use mpp_domains_mod,        only: domain2d, mpp_update_domains
 use mpp_domains_mod,        only: mpp_update_domains
 
-use kinddef,                only: kind_phys
-
 implicit none
 private
 
@@ -36,14 +34,14 @@ contains
    ! data_p - optional input field in packed format (ix,k)  
    !--------------------------------------------------------------------
    !--- interface variables ---
-   real(kind_phys), dimension(1:isize,1:jsize,ksize), intent(inout) :: data !< output array to return the field with halo (i,j,k)
+   real*8, dimension(1:isize,1:jsize,ksize), intent(inout) :: data !< output array to return the field with halo (i,j,k)
                                                                    !< optionally input for field already in (i,j,k) form
                                                                    !< sized to include the halo of the field (+ 2*halo)
    integer, intent(in) :: halo  !< size of the halo (must be less than 3)
    integer, intent(in) :: isize !< horizontal resolution in i-dir with haloes
    integer, intent(in) :: jsize !< horizontal resolution in j-dir with haloes
    integer, intent(in) :: ksize !< vertical resolution
-   real(kind_phys), dimension(:,:), optional, intent(in) :: data_p !< optional input field in packed format (ix,k)
+   real*8, dimension(:,:), optional, intent(in) :: data_p !< optional input field in packed format (ix,k)
    integer, intent(in) :: isc, iec, jsc, jec, npx, npy
    type(domain2d), intent(inout) :: domain_for_coupler
    !--- local variables ---
@@ -75,8 +73,8 @@ contains
    if (halo == 1) then
      call mpp_update_domains(data, domain_for_coupler, flags=mpp_flags, complete=.true.)
    ! Not needed for cellular automata code
-   elseif (halo == 3) then
-     call mpp_update_domains(data, domain_for_coupler, flags=mpp_flags, complete=.true.)
+   !elseif (halo == 3) then
+   !  call mpp_update_domains(data, Atm(mytile)%domain, flags=mpp_flags, complete=.true.)
    else
      call mpp_error(FATAL, modname//' - unsupported halo size')
    endif

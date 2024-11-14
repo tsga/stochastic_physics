@@ -31,8 +31,8 @@ include 'netcdf.inc'
 real :: ak(nlevs+1),bk(nlevs+1)
 real(kind=4) :: ts,undef
 
-data ak(1:4) /0.0, 306.1489, 13687.72    , 0.99/
-data bk(1:4) /1.0,   0.9284,     0.013348, 0.0/
+data ak(:) /0.0, 306.1489, 13687.72    , 0.99/
+data bk(:) /1.0,   0.9284,     0.013348, 0.0/
 integer     :: nb,blksz_1,nblks,ierr,my_id,i,j,k,l,nx,ny,id
 integer     :: isc,iec,jsc,jec,isd,ied,jsd,jed
 integer :: halo_update_type = 1
@@ -78,7 +78,7 @@ if (nargs.EQ.1) then
    call getarg(1,ntile_out_str)
 endif
 read(ntile_out_str,'(I1.1)') ntile_out
-open (unit=nlunit, file='input.nml', status='OLD')
+open (unit=nlunit, file='input.nml', READONLY, status='OLD')
 n_var_lndp=0
 lndp_type=0
 do_sppt=.false.
@@ -97,11 +97,10 @@ DO k=1,nlevs
    pressi(k)=ak(k)+p1000*bk(k)
 ENDDO
 ex3d=cp*(pressi/p1000)**(rd/cp)
-DO k=1,3 !nlevs
+DO k=1,nlevs
    exn = (ex3d(k)*pressi(k)-ex3d(k+1)*pressi(k+1))/((cp+rd)*(pressi(k)-pressi(k+1)))
    pressl(k)=p1000*exn**(cp/rd)
 ENDDO
-pressl(4:)=0.01
 
 call fms_init()
 call mpp_init()
@@ -133,7 +132,7 @@ enddo
 nthreads = 1
 me=my_id
 fhour=0
-dtp=600
+dtp=900
 fn_nml='input.nml'
 nlunit=21
 
@@ -298,7 +297,7 @@ else
    istart=1
 endif
 tpt=1
-do i=istart,21
+do i=istart,201
    ts=i/4.0
    call run_stochastic_physics(nlevs, i-1, fhour, blksz, &
                                sppt_wts=sppt_wts, shum_wts=shum_wts, skebu_wts=skebu_wts, skebv_wts=skebv_wts, sfc_wts=sfc_wts, &

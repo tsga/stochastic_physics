@@ -82,7 +82,8 @@
                                    !< supported and will likely not run. The default value is 0.
 
      logical, pointer :: nested   !< Whether this is a nested grid. .false. by default.
-     logical, pointer :: regional !< Is this a (stand-alone) limited area regional domain?
+     !logical, pointer :: regional !< Is this a (stand-alone) limited area regional domain?
+     logical :: regional = .false. !< 5.9.24 ptr complains about not assoc. w/ target
      logical :: bounded_domain !< Is this a regional or nested domain?
 
   end type fv_grid_type

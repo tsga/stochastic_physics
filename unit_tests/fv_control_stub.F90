@@ -134,6 +134,10 @@ module fv_control_stub_mod
 
      integer, pointer :: layout(:), io_layout(:)
      logical :: nested
+     
+     !5.9.24 test regional
+     logical :: regional
+     !logical, pointer :: bounded_domain
 
      !!!!!!!!!! END POINTERS !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -233,6 +237,7 @@ module fv_control_stub_mod
 
      call mpp_get_current_pelist(Atm(this_grid)%pelist, commID=commID) ! for commID
      call mp_start(commID,halo_update_type)
+     !print*, "ntiles", ntiles
 
      ! 4. Set up domains
      all_ntiles(this_grid) = ntiles
@@ -243,7 +248,10 @@ module fv_control_stub_mod
 
      all_npy(this_grid) = npy
      call mpp_max(all_npy, ngrids, global_pelist)
-
+     !print*, "ngrids", ngrids
+     !print*, "all_ntiles", all_ntiles
+     !print*, "all_npx", all_npx
+     !print*, "all_npy", all_npy
      do n=1,ngrids
         if (n/=this_grid) then
            Atm(n)%flagstruct%npx = all_npx(n)
@@ -303,6 +311,10 @@ module fv_control_stub_mod
        layout                        => Atm%layout
        io_layout                     => Atm%io_layout
 
+       !5.9.24 test regional
+       !regional                      => Atm%gridstruct%regional
+       !bounded_domain                => Atm%gridstruct%bounded_domain
+
      end subroutine set_namelist_pointers
 
 
@@ -344,7 +356,7 @@ module fv_control_stub_mod
 
        !  local version of these variables to allow PGI compiler to compile
 
-       namelist /fv_core_nml/npx, npy, ntiles, layout, io_layout, grid_type
+       namelist /fv_core_nml/npx, npy, ntiles, layout, io_layout, grid_type, regional !5.9.24 test regional
 
 
        f_unit = open_namelist_file(Atm%nml_filename)
@@ -357,11 +369,23 @@ module fv_control_stub_mod
        write(unit, nml=fv_core_nml)
 
        !*** single tile for Cartesian grids
+       !  if (grid_type>3) then
+       !     ntiles=1
+       !  else
+       !     ntiles=6
+       !  endif
        if (grid_type>3) then
           ntiles=1
-       else
-          ntiles=6
+         ! non_ortho = .false.
+         ! nf_omega = 0
        endif
+       !5.9.24 test regional
+      !if (regional) bounded_domain = .true.
+      if (regional) then
+         !bounded_domain = .true.
+         Atm%gridstruct%regional = .true.
+         Atm%gridstruct%bounded_domain = .true.
+      endif
 
 
 197    format(A,l7)

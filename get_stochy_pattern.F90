@@ -1,17 +1,16 @@
 !>@brief The module 'get_stochy_pattern_mod' contains the subroutines to retrieve the random pattern in the cubed-sphere grid
 module get_stochy_pattern_mod
- use kinddef
+ use kinddef, only : kind_dbl_prec, kind_evod
  use spectral_transforms, only : len_trie_ls,                       &
                                  len_trio_ls, ls_dim, stochy_la2ga,          &
                                  coslat_a, latg, levs, lonf, skeblevs,&
                                  four_to_grid, spec_to_four, dezouv_stochy,dozeuv_stochy
- use stochy_namelist_def, only : n_var_lndp, ntrunc, stochini,n_var_spp
+ use stochy_namelist_def, only : n_var_lndp, ntrunc, stochini
  use stochy_data_mod, only : gg_lats, gg_lons, inttyp, nskeb, nshum, nsppt, &
                              nocnsppt,nepbl,nlndp,                          &
                              rnlat, rpattern_sfc, rpattern_skeb,            &
                              rpattern_shum, rpattern_sppt, rpattern_ocnsppt,&
                              rpattern_epbl1, rpattern_epbl2, skebu_save,    &
-                             nspp,rpattern_spp,                             &
                              skebv_save, skeb_vwts, skeb_vpts, wlon
  use stochy_patterngenerator_mod, only: random_pattern, ndimspec,           &
                                         patterngenerator_advance
@@ -21,7 +20,7 @@ module get_stochy_pattern_mod
  implicit none
  private
 
- public  get_random_pattern_vector,get_random_pattern_spp 
+ public  get_random_pattern_vector   
  public  get_random_pattern_sfc,get_random_pattern_scalar
  public  write_stoch_restart_atm,write_stoch_restart_ocn
  logical :: first_call=.true.
@@ -102,19 +101,19 @@ subroutine get_random_pattern_vector(rpattern,npatterns,&
  type(stochy_internal_state), intent(in) :: gis_stochy
  type(random_pattern), intent(inout) :: rpattern(npatterns)
 
- real(kind=kind_dbl_prec), dimension(len_trie_ls,2) ::  vrtspec_e,divspec_e
- real(kind=kind_dbl_prec), dimension(len_trio_ls,2) ::  vrtspec_o,divspec_o
+ real(kind=kind_evod), dimension(len_trie_ls,2) ::  vrtspec_e,divspec_e
+ real(kind=kind_evod), dimension(len_trio_ls,2) ::  vrtspec_o,divspec_o
  integer::   npatterns
 
  real(kind=kind_dbl_prec) :: upattern_3d(gis_stochy%nx,gis_stochy%ny,levs)
  real(kind=kind_dbl_prec) :: vpattern_3d(gis_stochy%nx,gis_stochy%ny,levs)
  real(kind=kind_dbl_prec) :: pattern_1d(gis_stochy%nx)
  integer i,j,lat,n,nn,k
- real(kind_phys), dimension(lonf,gis_stochy%lats_node_a,1):: wrk2du,wrk2dv
+ real(kind_dbl_prec), dimension(lonf,gis_stochy%lats_node_a,1):: wrk2du,wrk2dv
 
 ! logical lprint
 
- real(kind_dbl_prec), allocatable, dimension(:,:) :: workgu,workgv
+ real, allocatable, dimension(:,:) :: workgu,workgv
  integer kmsk0(lonf,gis_stochy%lats_node_a)
  kmsk0 = 0
  allocate(workgu(lonf,latg))
@@ -275,61 +274,7 @@ subroutine get_random_pattern_scalar(rpattern,npatterns,&
    deallocate(workg)
 
 end subroutine get_random_pattern_scalar
-
-!>@brief The subroutine 'get_random_pattern_spp' converts spherical harmonics
-!to the gaussian grid then interpolates to the target grid
-!>@details This subroutine is for a 2-D (lat-lon) scalar field
-subroutine get_random_pattern_spp(rpattern,npatterns,&
-           gis_stochy,pattern_3d)
-
-! generate a random pattern for stochastic physics
- implicit none
- type(random_pattern), intent(inout)  :: rpattern(npatterns)
- type(stochy_internal_state)          :: gis_stochy
- integer,intent(in)::   npatterns
-
- integer i,j,lat,n
-
-! logical lprint
-
- real(kind=kind_dbl_prec), allocatable, dimension(:,:) :: workg
- real (kind=kind_dbl_prec)   glolal(lonf,gis_stochy%lats_node_a)
- integer kmsk0(lonf,gis_stochy%lats_node_a)
- real(kind=kind_dbl_prec) :: pattern_3d(gis_stochy%nx,gis_stochy%ny,npatterns)
- real(kind=kind_dbl_prec) :: pattern_1d(gis_stochy%nx)
-
- allocate(workg(lonf,latg))
- do n=1,npatterns
-    kmsk0 = 0
-    glolal = 0.
-    call patterngenerator_advance(rpattern(n),1,.false.)
-    call scalarspect_to_gaugrid(rpattern(n),gis_stochy,   &
-         glolal,1)
-
- workg = 0.
-  do j=1,gis_stochy%lats_node_a
-     lat=gis_stochy%global_lats_a(gis_stochy%ipt_lats_node_a-1+j)
-     do i=1,lonf
-        workg(i,lat) = glolal(i,j)
-     enddo
-  enddo
-
-   call mp_reduce_sum(workg,lonf,latg)
-
-! interpolate to cube grid
-   do j=1,gis_stochy%ny
-      pattern_1d = 0
-      associate( tlats=>gis_stochy%parent_lats(1:gis_stochy%len(j),j),&
-                 tlons=>gis_stochy%parent_lons(1:gis_stochy%len(j),j))
-      call stochy_la2ga(workg,lonf,latg,gg_lons,gg_lats,wlon,rnlat,&
-                        pattern_1d(1:gis_stochy%len(j)),gis_stochy%len(j),tlats,tlons)
-      pattern_3d(:,j,n)=pattern_1d(:)
-      end associate
-   enddo
- enddo
- deallocate(workg)
-
-end subroutine get_random_pattern_spp
+!
 
 !>@brief The subroutine 'scalarspect_to_gaugrid' converts scalar spherical harmonics to a scalar on a gaussian grid
 !>@details This subroutine is for a 2-D (lat-lon) scalar field
@@ -377,20 +322,18 @@ subroutine scalarspect_to_gaugrid(rpattern,gis_stochy,datag,n)
 subroutine write_stoch_restart_atm(sfile)
 !\callgraph
     use netcdf
-    use stochy_namelist_def, only : do_sppt,do_shum,do_skeb,lndp_type,do_spp
+    use stochy_namelist_def, only : do_sppt,do_shum,do_skeb,lndp_type
     implicit none
     character(len=*) :: sfile
     integer :: stochlun,k,n,isize,ierr
-    integer :: ncid,varid1a,varid1b,varid2a,varid2b,varid3a,varid3b,varid4a,varid4b,varid5a,varid5b
+    integer :: ncid,varid1a,varid1b,varid2a,varid2b,varid3a,varid3b,varid4a,varid4b
     integer :: seed_dim_id,spec_dim_id,zt_dim_id,ztsfc_dim_id,np_dim_id,npsfc_dim_id
-    integer :: ztspp_dim_id,npspp_dim_id
-
     include 'netcdf.inc'
 
-    if ( ( .NOT. do_sppt) .AND. (.NOT. do_shum) .AND. (.NOT. do_skeb) .AND. (lndp_type==0 ) .AND. (.NOT. do_spp)) return
+    if ( ( .NOT. do_sppt) .AND. (.NOT. do_shum) .AND. (.NOT. do_skeb) .AND. (lndp_type==0 ) ) return
     stochlun=99
     if (is_rootpe()) then
-       if (nsppt > 0 .OR. nshum > 0 .OR. nskeb > 0 .OR. nlndp>0 .OR. nspp>0 ) then
+       if (nsppt > 0 .OR. nshum > 0 .OR. nskeb > 0 .OR. nlndp>0 ) then
           ierr=nf90_create(trim(sfile),cmode=NF90_CLOBBER,ncid=ncid)
           ierr=NF90_PUT_ATT(ncid,NF_GLOBAL,"ntrunc",ntrunc)
           call random_seed(size=isize) ! get seed size
@@ -403,12 +346,6 @@ subroutine write_stoch_restart_atm(sfile)
              ierr=NF90_PUT_ATT(ncid,npsfc_dim_id,"long_name","number of random patterns for surface)")
              ierr=NF90_DEF_DIM(ncid,"n_var_lndp",n_var_lndp,ztsfc_dim_id)
              ierr=NF90_PUT_ATT(ncid,ztsfc_dim_id,"long_name","number of sfc perturbation types")
-          endif
-          if (nspp .GT. 0) then
-             ierr=NF90_DEF_DIM(ncid,"num_patterns_spp",nspp,npspp_dim_id) !  should be 5
-             ierr=NF90_PUT_ATT(ncid,npspp_dim_id,"long_name","number of random patterns for spp)")
-             ierr=NF90_DEF_DIM(ncid,"n_var_spp",n_var_spp,ztspp_dim_id)
-             ierr=NF90_PUT_ATT(ncid,ztspp_dim_id,"long_name","number of spp perturbation types")
           endif
           ierr=NF90_DEF_DIM(ncid,"ndimspecx2",2*ndimspec,spec_dim_id)
           ierr=NF90_PUT_ATT(ncid,spec_dim_id,"long_name","number of spectral cofficients")
@@ -437,12 +374,6 @@ subroutine write_stoch_restart_atm(sfile)
              ierr=NF90_PUT_ATT(ncid,varid4a,"long_name","random number seed for SHUM")
              ierr=NF90_DEF_VAR(ncid,"sfcpert_spec",NF90_DOUBLE,(/spec_dim_id, ztsfc_dim_id, npsfc_dim_id/), varid4b)
              ierr=NF90_PUT_ATT(ncid,varid4b,"long_name","spectral cofficients SHUM")
-          endif
-          if (nspp>0) then
-             ierr=NF90_DEF_VAR(ncid,"spp_seed",NF90_DOUBLE,(/seed_dim_id, ztspp_dim_id, npspp_dim_id/), varid5a)
-             ierr=NF90_PUT_ATT(ncid,varid5a,"long_name","random number seed for SPP")
-             ierr=NF90_DEF_VAR(ncid,"spp_spec",NF90_DOUBLE,(/spec_dim_id, ztspp_dim_id, npspp_dim_id/), varid5b)
-             ierr=NF90_PUT_ATT(ncid,varid5b,"long_name","spectral cofficients SPP")
           endif
           ierr=NF90_ENDDEF(ncid)
           if (ierr .NE. 0) then
@@ -473,11 +404,6 @@ subroutine write_stoch_restart_atm(sfile)
           do k=1,n_var_lndp
              call write_pattern(rpattern_sfc(n),ncid,k,n,varid4a,varid4b,.true.,ierr)
           enddo
-       enddo
-    endif
-    if (nspp > 0) then
-       do n=1,nspp
-          call write_pattern(rpattern_spp(n),ncid,1,n,varid5a,varid5b,.true.,ierr)
        enddo
     endif
     if (is_rootpe() ) then
@@ -566,7 +492,7 @@ subroutine write_stoch_restart_ocn(sfile)
    integer, intent(in) :: np,varid1,varid2
    logical, intent(in) :: slice_of_3d
    integer, intent(out) :: iret
-   real(kind_phys), allocatable  :: pattern2d(:)
+   real(kind_dbl_prec), allocatable  :: pattern2d(:)
    integer nm,nn,arrlen,isize,ierr
    integer,allocatable :: isave(:)
    include 'netcdf.inc'
@@ -623,8 +549,8 @@ subroutine write_stoch_restart_ocn(sfile)
       real(kind=kind_dbl_prec), intent(in) :: trio_di(len_trio_ls,2)
       real(kind=kind_dbl_prec), intent(in) :: trie_ze(len_trie_ls,2)
       real(kind=kind_dbl_prec), intent(in) :: trio_ze(len_trio_ls,2)
-      real(kind=kind_phys), intent(out) :: uug(lonf,gis_stochy%lats_node_a)
-      real(kind=kind_phys), intent(out) :: vvg(lonf,gis_stochy%lats_node_a)
+      real(kind=kind_dbl_prec), intent(out) :: uug(lonf,gis_stochy%lats_node_a)
+      real(kind=kind_dbl_prec), intent(out) :: vvg(lonf,gis_stochy%lats_node_a)
 ! local vars
       real(kind=kind_dbl_prec) trie_ls(len_trie_ls,2,2)
       real(kind=kind_dbl_prec) trio_ls(len_trio_ls,2,2)
@@ -632,7 +558,7 @@ subroutine write_stoch_restart_ocn(sfile)
       real(kind=kind_dbl_prec) for_gr_a_2(lonf,2,gis_stochy%lats_dim_a)
       integer              i,k
       integer              lan,lat
-      real (kind=kind_phys) tx1
+      real (kind=kind_dbl_prec) tx1
 
       call dezouv_stochy(trie_di(:,:),       trio_ze(:,:), &
                   trie_ls(:,:,1), trio_ls(:,:,2), gis_stochy%epsedn,gis_stochy%epsodn, &

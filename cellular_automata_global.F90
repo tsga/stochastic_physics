@@ -1,7 +1,7 @@
 module cellular_automata_global_mod
 
 use update_ca, only : domain_global,iscnx_g,iecnx_g,jscnx_g,jecnx_g,isdnx_g,iednx_g,jsdnx_g,jednx_g, &
-                      nxncells_g,nyncells_g,csum,cold_start_ca_global
+                      nxncells_g,nyncells_g,csum
 implicit none
 
 contains
@@ -11,13 +11,12 @@ subroutine cellular_automata_global(kstep,restart,first_time_step,ca1_cpl,ca2_cp
             nca,ncells,nlives,nfracseed,nseed,iseed_ca, mytile, &
             ca_smooth,nspinup,blocksize,nsmooth,ca_amplitude,mpiroot,mpicomm)
 
-use mpi_f08
-use kinddef,           only: kind_dbl_prec, kind_phys
+use kinddef,           only: kind_dbl_prec
 use update_ca,         only: update_cells_global,define_ca_domain
 use halo_exchange,     only: atmosphere_scalar_field_halo
 use random_numbers,    only: random_01_CB
 use mpp_domains_mod,   only: domain2D,mpp_get_global_domain,CENTER, mpp_get_data_domain, mpp_get_compute_domain,mpp_global_sum, &
-                             BITWISE_EFP_SUM, BITWISE_EXACT_SUM,mpp_define_io_domain,mpp_get_io_domain_layout
+                             BITWISE_EFP_SUM, BITWISE_EXACT_SUM
 use block_control_mod, only: block_control_type, define_blocks_packed
 use mpi_wrapper,       only: mp_reduce_sum,mp_reduce_max,mp_reduce_min, &
                              mpi_wrapper_initialize,mype,is_rootpe
@@ -31,14 +30,13 @@ implicit none
 
 !This program evolves a cellular automaton uniform over the globe 
 
-integer,              intent(in)    :: kstep,ncells,nca,nlives,nseed,nspinup,nsmooth,mpiroot
-type(MPI_Comm),       intent(in)    :: mpicomm
-integer(kind=kind_dbl_prec),  intent(in)    :: iseed_ca
+integer,              intent(in)    :: kstep,ncells,nca,nlives,nseed,nspinup,nsmooth,mpiroot,mpicomm
+integer*8,            intent(in)    :: iseed_ca
 integer,              intent(in)    :: mytile
-real(kind=kind_phys), intent(in)    :: nfracseed,ca_amplitude
+real(kind=kind_dbl_prec), intent(in)    :: nfracseed,ca_amplitude
 logical,              intent(in)    :: ca_smooth,first_time_step, restart
 integer,              intent(in)    :: nblks,isc,iec,jsc,jec,npx,npy,nlev,blocksize
-real(kind=kind_phys), intent(out)   :: ca1_cpl(:,:),ca2_cpl(:,:),ca3_cpl(:,:)
+real(kind=kind_dbl_prec), intent(out)   :: ca1_cpl(:,:),ca2_cpl(:,:),ca3_cpl(:,:)
 type(domain2D),       intent(inout) :: domain_in
 type(block_control_type) :: Atm_block
 integer :: nlon, nlat, isize,jsize,nf,nn
@@ -52,9 +50,8 @@ integer :: nxncells, nyncells
 integer(8) :: count, count_rate, count_max, count_trunc,nx_full
 integer(8) :: iscale = 10000000000
 integer, allocatable :: iini_g(:,:,:),ilives_g(:,:)
-integer, allocatable :: io_layout(:)
-real(kind=kind_phys), allocatable :: field_out(:,:,:), field_smooth(:,:)
-real(kind=kind_phys), allocatable :: CA(:,:),CA1(:,:),CA2(:,:),CA3(:,:),CAprime(:,:)
+real(kind=kind_dbl_prec), allocatable :: field_out(:,:,:), field_smooth(:,:)
+real(kind=kind_dbl_prec), allocatable :: CA(:,:),CA1(:,:),CA2(:,:),CA3(:,:),CAprime(:,:)
 real*8              , allocatable :: noise(:,:,:)
 real*8               :: psum,CAmean,sq_diff,CAstdv,inv9
 real*8               :: Detmax,Detmin
@@ -76,7 +73,7 @@ if (first_time_step) then
    call mpi_wrapper_initialize(mpiroot,mpicomm)
 end if
 
-halo=3
+halo=1
 k_in=1
 
 !----------------------------------------------------------------------------
@@ -105,12 +102,8 @@ k_in=1
  !Get CA domain
 
  if(first_time_step)then 
-    if (.not. restart) then
-       allocate(io_layout(2))
-       io_layout=mpp_get_io_domain_layout(domain_in)
-       call define_ca_domain(domain_in,domain_global,halo,ncells,nxncells_g,nyncells_g)
-       call mpp_define_io_domain(domain_global, io_layout)
-     endif
+!    if (.not. restart) call define_ca_domain(domain_in,domain_global,ncells,nxncells_g,nyncells_g)
+     domain_global=domain_in
     call mpp_get_data_domain    (domain_global,isdnx_g,iednx_g,jsdnx_g,jednx_g)
     call mpp_get_compute_domain (domain_global,iscnx_g,iecnx_g,jscnx_g,jecnx_g)
  endif
@@ -167,7 +160,7 @@ k_in=1
        else
           ! don't rely on compiler to truncate integer(8) to integer(4) on
           ! overflow, do wrap around explicitly.
-          count4 = mod(((iseed_ca+7)*mytile)*(i1+nx_full*(j1-1))+ 2147483648_8, 4294967296_8) - 2147483648_8
+          count4 = mod(((iseed_ca+7)*mytile)*(i1+nx_full*(j1-1))+ 2147483648, 4294967296) - 2147483648
        endif
        ct=1
        do nf=1,nca
@@ -210,7 +203,7 @@ k_in=1
 
     CA(:,:)=0.
 
-    call update_cells_global(kstep,halo,first_time_step,iseed_ca,restart,nca,nxc,nyc,nxch,nych,nlon,nlat,isc,iec,jsc,jec, &
+    call update_cells_global(kstep,first_time_step,iseed_ca,restart,nca,nxc,nyc,nxch,nych,nlon,nlat,isc,iec,jsc,jec, &
                             npx,npy,CA,iini_g,ilives_g,         &
                             nlives,ncells,nfracseed,nseed,nspinup,nf,mytile)
 
@@ -260,6 +253,7 @@ k_in=1
     sq_diff= mpp_global_sum (domain_global, CAprime, flags=BITWISE_EXACT_SUM)
 
     CAstdv = sqrt(sq_diff/csum)
+    print*,'in rescale',psum,sq_diff,csum
 
     !Transform to mean of 1 and ca_amplitude standard deviation
 
@@ -288,6 +282,7 @@ k_in=1
  enddo !nf
 
  do blk = 1, Atm_block%nblks
+    print*,'in ca_global',Atm_block%nblks,Atm_block%blksz(blk)
     do ix = 1,Atm_block%blksz(blk)
        i = Atm_block%index(blk)%ii(ix) - isc + 1
        j = Atm_block%index(blk)%jj(ix) - jsc + 1
