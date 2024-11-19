@@ -86,8 +86,9 @@ enddo
 ! replace
 INTTYP=0 ! bilinear interpolation
 call init_stochdata(levs,dtp,input_nml_file_in,trim(stoch_ini_file),fn_nml,nlunit,iret)
-print*,'back from init stochdata',iret
+!print*,'back from init stochdata',iret
 if (iret .ne. 0) return
+
 ! check namelist entries for consistency
 if (do_sppt_in.neqv.do_sppt) then
    write(0,'(*(a))') 'Logic error in stochastic_physics_init: incompatible', &

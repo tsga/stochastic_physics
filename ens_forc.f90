@@ -144,12 +144,18 @@
     
     character(len=500)      :: stoch_ini_file !11.8.21 TZG input init pattern file
 
+    logical     :: perturb_state ! add state/snow depth perturbation--for now uses precip params
+    character(len=128)      :: state_var_name, state_file_name
+    CHARACTER(len=500)      :: state_file_ens
+    Integer                 :: ncid_st
+
     NAMELIST/NAMSNO/ IDIM, JDIM, NUM_TILES, i_layout, j_layout, IY, IM, ID, IH, FH, DELTSFC, &
                     horz_len_scale, ver_len_scale, temp_len_scale, ens_size, &
                     t_len, t_indx, &
                     static_filename, fv3_prefix, vector_prefix, rand_var, &
                     PRINTRANK, print_debg_info, n_surf_vars, &
-                    vector_size, forc_inp_path, forc_inp_file, std_dev_f, forc_var_list             
+                    vector_size, forc_inp_path, forc_inp_file, std_dev_f, forc_var_list,  &
+                    perturb_state, state_file_name, state_var_name               
     !
     DATA IDIM,JDIM,NUM_TILES, i_layout, j_layout/96,96,6, 1, 1/ 
     DATA IY,IM,ID,IH,FH/1997,8,2,0,0./
@@ -175,6 +181,10 @@
             "longwave_radiation", "temperature",           &
             "wind_speed", "specific_humidity", "precipitation_conserve", &
             "surface_pressure"/ !not being perturbed atm   
+    Data perturb_state/.false./
+    Data state_file_name/"ufs_land_restart.2020-01-01_00-00-00.nc"/
+    Data state_var_name/"snwdph"/
+
     ! DATA obs_srch_rad/250.0/   
     ! DATA stdev_obsv_depth/40.0/
     ! DATA stdev_obsv_sncov/80.0/
@@ -547,12 +557,22 @@
             ! forcing file
             INQUIRE(FILE=trim(forc_inp_file_ens), EXIST=file_exists)
             if (.not. file_exists) then 
-                print *, 'error,file does not exist', &   
-                        trim(forc_inp_file_ens) , ' exiting'
-                call MPI_ABORT(MPI_COMM_WORLD, 10, IERR) ! CSD - add proper error trapping?
+                print *, 'error,file does not exist ', trim(forc_inp_file_ens) , ' exiting'
+                call MPI_ABORT(MPI_COMM_WORLD, 10, error) 
             endif
             error = nf90_open(trim(forc_inp_file_ens), NF90_WRITE, ncid)
             call netcdf_err(error, 'opening forcing file' )
+
+            if (perturb_state) then
+                state_file_ens=TRIM(forc_inp_path)//"/mem"//TRIM(mem_str)//"/"//TRIM(state_file_name)
+                INQUIRE(FILE=trim(state_file_ens), EXIST=file_exists)
+                if (.not. file_exists) then
+                    print *, 'error,file does not exist', trim(state_file_ens) , ' exiting'
+                    call MPI_ABORT(MPI_COMM_WORLD, 10, error)
+                endif
+                error = nf90_open(trim(state_file_ens), NF90_WRITE, ncid_st)
+                call netcdf_err(error, 'opening state file '//trim(state_file_ens) )
+            endif
         endif
         ! IF (p_gRank==0) PRINT*," calling stand alone stochy, ens ", ie
         do_sppt=.false.
@@ -564,14 +584,16 @@
             do_skeb, lndp_type, n_var_lndp, use_zmtnblck, skeb_npass, &
             lndp_var_list, lndp_prt_list,    &
             ak, bk, nthreads, root_pe, comm_tile(p_gN+1), ierr)
-        if (ierr .ne. 0) print *, 'ERROR init_stochastic_physics call' ! Draper - need proper error trapping here
+        if (ierr .ne. 0) then 
+            print *, 'ERROR init_stochastic_physics call'
+            call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
+        endif
         do_sppt=.false.
         do_shum=.false.
         do_skeb=.false.
-        ! if (p_gRank == 0) then
-        !     print*, " pe group", p_gN + 1
-        !     PRINT*," done init_stochastic_physics, ens ", ie
-        ! endif
+        !if (p_gRank == 0) then
+        !    print*, " pe group", p_gN + 1, " Done init_stochy, ens ", ie, " time ", it    
+        !endif
         
         Do it=1, t_len
             call run_stochastic_physics(nlevs, it-1, fhour, blksz, &
@@ -591,10 +613,10 @@
             sfc_wts_out(:,:,3) =  L_cov(3,1) * sfc_wts(:,:,1) + &
                                   L_cov(3,2) * sfc_wts(:,:,2) + &
                                   L_cov(3,3) * sfc_wts(:,:,3)
-            ! if (p_gRank == 0) then
-            !     print*, " pe group", p_gN + 1
-            !     PRINT*," Done run_stochastic_physics, ens", ie, "time", it    
-            ! endif
+
+            !if (p_gRank == 0) then
+            !    print*, " pe group", p_gN + 1, " Done run_stochy, ens ", ie, " time ", it    
+            !endif
 
             Do ixy = 1, n_surf_vars        !vector_length 
                 if (p_gRank /= 0) then  
@@ -640,29 +662,36 @@
                     error = nf90_put_var(ncid, varid , forcArray,       &
                         start = (/1,it/), count = (/vector_size, 1/))
                     call netcdf_err(error, 'writing '//trim(forc_var_list(ixy)) )
-                    ! if(ixy == 1) then
-                    !     ! precip type 2
-                    !     error = nf90_inq_varid(ncid, trim(forc_var_list(7)), varid)
-                    !     call netcdf_err(error, 'getting varid '//trim(forc_var_list(7)) )
-                    !     !read
-                    !     ERROR=NF90_GET_VAR(NCID, varid, forcArray, &
-                    !             start = (/1,it/), count = (/vector_size, 1/))
-                    !     CALL NETCDF_ERR(ERROR, 'ERROR READING '//trim(forc_var_list(7)) )                  
-                    !     ! print*, trim(forc_var_list(7))
-                    !     ! print*, forcArray
-                    !     forcArray = vector_rand_ens * forcArray 
-                    !     ! print*, trim(forc_var_list(ixy)), " after mult"
-                    !     ! print*, forcArray
-                    !     error = nf90_put_var(ncid, varid , forcArray,       &
-                    !         start = (/1,it/), count = (/vector_size, 1/))
-                    !     call netcdf_err(error, 'writing '//trim(forc_var_list(7)) ) 
-                    ! endif                                      
+
+                    if(perturb_state .and. it == 1 .and. ixy == 1 ) then
+
+                        error = nf90_inq_varid(ncid_st, trim(state_var_name), varid)
+                        call netcdf_err(error, 'getting varid '//trim(state_var_name) )
+                        !read
+                        ERROR=NF90_GET_VAR(ncid_st, varid, forcArray, &
+                                start = (/1,it/), count = (/vector_size, 1/))
+                        CALL NETCDF_ERR(ERROR, 'ERROR READING '//trim(state_var_name) )
+
+                        forcArray = vector_rand_ens * forcArray
+                        ! print*, trim(forc_var_list(ixy)), " after mult"
+                        ! print*, forcArray
+
+                        error = nf90_put_var(ncid_st, varid , forcArray,       &
+                            start = (/1,it/), count = (/vector_size, 1/))
+                        call netcdf_err(error, 'writing '//trim(state_var_name) )
+                    endif
+
                 Endif                
             end do             
         Enddo
         if (p_gRank == 0) then
             error = nf90_close(ncid)
             call netcdf_err(error, 'closing '//trim(forc_inp_file_ens) ) 
+
+            if (perturb_state) then
+                error = nf90_close(ncid_st)
+                call netcdf_err(error, 'closing '//trim(state_file_ens) )
+            endif
         endif
         ! if (stochini) then
         !     call write_stoch_restart_atm('stochy_final_2_ens'//ensCH//'.nc')
