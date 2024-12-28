@@ -730,6 +730,9 @@
                         ! pert_factors = 1 + std_dev * corr_rand
                         vector_rand_ens = 1.0 + (std_dev_f(ixy) * vector_rand_ens)
                         forcArray = vector_rand_ens * forcArray 
+!Note: assuming only vol soil moist content with unit of mm3/mm3 etc
+! revise if var like snow content is perturbed
+                        Where(forcArray > 1.) forcArray = 1.
                     else
                         ! pert_factors = target_mean(0.0) + std_dev * corr_rand
                         vector_rand_ens = std_dev_f(ixy) * vector_rand_ens
