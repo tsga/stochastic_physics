@@ -1,8 +1,8 @@
  Program GenEnsForc
     ! PROGRAM FV3Tiles_To_Vector(LENS_OUT, vector_rand_ens)
     
-    use stochastic_physics,  only : init_stochastic_physics,&
-                            run_stochastic_physics, finalize_stochastic_physics
+    use stochastic_physics,  only : init_stochastic_physics_land,&
+                            run_stochastic_physics_land, finalize_stochastic_physics
     use get_stochy_pattern_mod,  only : write_stoch_restart_atm
 
     use atmosphere_stub_mod, only: Atm,atmosphere_init_stub
@@ -25,7 +25,7 @@
     integer, parameter :: dp = kind(1.0d+0)
 
     integer, parameter      :: nlevs=3
-    integer, parameter :: max_n_var_lndp = 6
+    ! integer, parameter :: max_n_var_lndp = 6
     integer                 :: ntasks,fid
     integer                 :: nthreads
     integer            :: ncid, xt_dim_id,yt_dim_id,time_dim_id,xt_var_id,&
@@ -35,8 +35,8 @@
     integer                 :: zt_dim_id,zt_var_id
     character*2             :: strid
 
-    character(len=3), dimension(max_n_var_lndp)         ::  lndp_var_list
-    real(kind=kind_dbl_prec), dimension(max_n_var_lndp) ::  lndp_prt_list
+    ! character(len=3), dimension(max_n_var_lndp)         ::  lndp_var_list
+    ! real(kind=kind_dbl_prec), dimension(max_n_var_lndp) ::  lndp_prt_list
     
     real :: ak(nlevs+1),bk(nlevs+1)
     real(kind=4) :: ts,undef
@@ -45,78 +45,73 @@
     data bk(:) /1.0,   0.9284,     0.013348, 0.0/
     integer     :: nb,blksz_1,nblks,ierr,my_id,i,j,k,l,nx,ny !,id
     integer     :: isc,iec,jsc,jec,isd,ied,jsd,jed
-    integer :: halo_update_type = 1
+    integer     :: halo_update_type = 1
     real        :: dx,dy,pi,rd,cp
     ! logical   :: write_this_tile
     integer  :: nargs,ntile_out,nlunit,pe,npes,stackmax=4000000
     integer  :: i1,i2,j1,npts,istart,tpt
-    character*80 :: fname
-    ! character*1  :: ntile_out_str
-    integer :: comm
 
-!4.25.23 these below are not being used
-    ! real(kind=4),allocatable,dimension(:,:) :: workg,tile_number
-    ! real(kind=4),allocatable,dimension(:,:,:) :: workg3d
+!4.25.23 not sure below are being used
+    real(kind=4), allocatable, dimension(:)                   :: grid_xt, grid_yt
 
-    real(kind=4),allocatable,dimension(:) :: grid_xt,grid_yt
     real(kind=kind_phys), dimension(:,:),   allocatable, save :: xlat
     real(kind=kind_phys), dimension(:,:),   allocatable, save :: xlon
-    real(kind=kind_dbl_prec)    :: ex3d(nlevs+1),pressi(nlevs+1),pressl(nlevs),&
-                                   p1000,exn
 
-    type(grid_box_type)           :: grid_box
-    real (kind=kind_phys),allocatable :: shum_wts  (:,:,:)
-    real (kind=kind_phys),allocatable :: sppt_wts  (:,:,:)
-    real (kind=kind_phys),allocatable :: sppt_pattern(:,:)
-    real (kind=kind_phys),allocatable :: skebu_wts (:,:,:)
-    real (kind=kind_phys),allocatable :: skebv_wts (:,:,:)
-    real (kind=kind_phys),allocatable :: sfc_wts   (:,:,:)
-    integer,allocatable :: blksz(:)
+    type(grid_box_type)                :: grid_box
+
+    real (kind=kind_phys),allocatable  :: sfc_wts   (:,:,:)
+    integer,allocatable                :: blksz(:)
     integer              :: me              !< MPI rank designator
     integer              :: root_pe         !< MPI rank of root atmosphere processor
     real(kind=kind_phys) :: dtp             !< physics timestep in seconds
     real(kind=kind_phys) :: fhour           !< previous forecast hour
-    real(kind=kind_phys) :: sppt_amp        !< amplitude of sppt (to go to cld scheme)
-    logical  :: do_sppt,do_shum,do_skeb,use_zmtnblck
-    integer  ::  skeb_npass,n_var_lndp, lndp_type
-    character(len=65) :: fn_nml                   !< namelist filename
+
+    ! real(kind=kind_phys) :: sppt_amp        !< amplitude of sppt (to go to cld scheme)
+    ! logical  :: do_sppt,do_shum,do_skeb,
+    ! integer  ::  skeb_npass
+
+    logical  :: use_zmtnblck    
+    integer  ::  n_var_lndp, lndp_type
+    character(len=65)              :: fn_nml                   !< namelist filename
     character(len=256),allocatable :: input_nml_file(:) !< character string containing full namelist
     
-    ! Integer, intent(in)   :: LENS_OUT, num_ens
-    ! Real, intent(out)     :: vector_rand_ens(LENS_OUT)
     Real, allocatable     :: vector_rand_ens(:)
     INTEGER :: IDIM, JDIM, NUM_TILES, IY, IM, ID, IH, &
                i_layout, j_layout, tot_subtiles, my_tile
     REAL    :: FH, DELTSFC
     ! INTEGER :: IERR
-    INTEGER :: NPROCS, MYRANK, NUM_THREADS, NUM_PARTHDS, MAX_TASKS
+    INTEGER             :: NPROCS, MYRANK, NUM_THREADS, NUM_PARTHDS, MAX_TASKS
     REAL                :: horz_len_scale, ver_len_scale, temp_len_scale 
-    Integer             :: ens_size, n_surf_vars, t_indx, t_len
+    Integer             :: ens_size, t_indx, t_len       !, n_surf_vars
+    integer             :: n_forc_vars = 6
+    integer             :: n_state_vars = 8
     ! LOGICAL             :: rcov_localize, ens_inflate
     CHARACTER(LEN=500)  :: static_filename, fv3_prefix, vector_prefix
-    CHARACTER(LEN=50)   :: rand_var
-    integer             :: PRINTRANK
-    LOGICAL             :: print_debg_info
+    ! CHARACTER(LEN=50)   :: rand_var
+    integer             :: PRINTRANK = 4
+    LOGICAL             :: print_debg_info = .false.
   
-    Integer                :: LENSFC, LENSFC_landm, vector_size
+    Integer                :: LENSFC, LENSFC_landm
     INTEGER, allocatable   :: tile_xy(:), Idim_xy(:), Jdim_xy(:), VETFCS(:)
     Real, allocatable      :: RLA_land(:), RLO_land(:), OROG_land(:)
-    ! Real, allocatable      :: rand_Ta(:), rand_Prec(:), rand_sRad(:), rand_lRad(:)
-    ! Real, allocatable      :: rand_sHum(:), rand_wSpeed 
+
     Real, allocatable      :: rand_Ta3D(:,:,:), sfc_wts_out(:,:,:)
-    ! Real, allocatable      :: vector_rand_Ta(:)
+
     CHARACTER(LEN=500)     :: fv3_inp_file, vector_inp_file
     CHARACTER(LEN=2)       :: RANKCH 
 
-    CHARACTER(len=250)     :: forc_inp_path, forc_inp_file
-    CHARACTER(len=500)     :: forc_inp_file_ens
     CHARACTER(LEN=2)       :: peg_str
     CHARACTER(LEN=4)       :: ensCH
     character(len=3)       :: mem_str
     CHARACTER(LEN=3)       :: proc_str
-    Real                   :: std_dev_f(8)
+    CHARACTER(len=500)     :: forc_inp_file_ens
+    CHARACTER(len=250)     :: forc_inp_path = "./"
+    CHARACTER(len=250)     :: forc_inp_file = "C96_GDAS_forcing_2019-12-15.nc"    
+    Integer                :: vector_size = 18360
+    Real                   :: std_dev_f(6) = (/0.1, 0.05, 20.0, 2.0, 0.05, 0.05/)
+    Real                   :: std_dev_s(8) = (/0.2, 0.2, 0.2, 0.2, 2.0, 2.0, 2.0, 2.0/)
     
-    Integer                :: ixy, ipr, arr_indx, iproc, ie, iv, it
+    Integer                :: ixy, sxy, ipr, arr_indx, iproc, ie, iv, it
     ! real,allocatable       :: DUMMY1(:,:)
     INTEGER                :: mpiReal_size, rsize, isize, mpiInt_size
     integer, allocatable   :: tile_members(:,:), tile_group(:), comm_tile(:)
@@ -124,38 +119,76 @@
     integer                :: Np_ext, Np_til, p_gN, p_gRank
     integer, allocatable   :: pg_bindx(:,:)
 
-    LOGICAL             :: file_exists
-    Integer             :: error, varid !ncid, 
-    ! character(len=50), dimension (8)   :: forc_var_list
-    Real, allocatable      :: forcArray(:)
+    LOGICAL                :: file_exists
+    Integer                :: error, varid !ncid, 
+ 
+    Real, allocatable      :: forcArray(:), stateArray(:, :)
     Real(dp), allocatable  :: C_cov(:,:), L_cov(:,:)
-    Integer, parameter, dimension(8)  :: ens_gen_type = (/1, 1, 0, 0, 1, 1, 1, 1/)
- !   character(len=*), parameter, dimension (8)   :: forc_var_list_par = &
- !         (/"precipitation", "solar_radiation",   &
- !           "longwave_radiation", "temperature",           &
- !           "wind_speed", "specific_humidity", "precipitation_conserve", &
- !           "surface_pressure"/) !not being perturbed atm
 
-    character(len=128), dimension (8)   :: forc_var_list = &
-          (/"precipitation", "solar_radiation",   &
-            "longwave_radiation", "temperature",           &
-            "wind_speed", "specific_humidity", "precipitation_conserve", &
-            "surface_pressure"/) !not being perturbed atm
-    
-    character(len=500)      :: stoch_ini_file !11.8.21 TZG input init pattern file
+    character(len=500)      :: stoch_ini_file   ! input init pattern file
 
-    logical     :: perturb_state ! add state/snow depth perturbation--for now uses precip params
-    character(len=128)      :: state_var_name, state_file_name
+    logical                 :: perturb_forcing = .true., perturb_state = .false.    ! if true, state pert samples start at n_forc + 1 
+    character(len=128)      :: state_file_name = "ufs_land_restart.2020-01-01_00-00-00.nc"
     CHARACTER(len=500)      :: state_file_ens
     Integer                 :: ncid_st
 
-    NAMELIST/NAMSNO/ IDIM, JDIM, NUM_TILES, i_layout, j_layout, IY, IM, ID, IH, FH, DELTSFC, &
+    Integer, dimension(6)  :: forc_ens_pert_type = (/1, 1, 0, 0, 1, 1/)
+    Integer, dimension(8)  :: state_ens_pert_type = (/1, 1, 1, 1, 0, 0, 0, 0/)
+! use snow and soil levels info 
+    ! Integer, dimension(8)  :: state_layer_dims = (/3, 3, 4, 4, 1, 1, 1, 1/)
+    Integer                :: st_layer_dim
+    character(len=24)      :: st_layer_var
+
+    character(len=128), dimension (6)   :: forc_var_list = &
+        (/"precipitation", "solar_radiation",     &
+        "longwave_radiation", "temperature",    &
+        "wind_speed", "specific_humidity"/)
+! ToDo Check smc or slc is the correct var
+
+    character(len=128), dimension (8)   :: state_var_list =   &       
+        (/'slc1', 'slc2', 'slc3', 'slc4', 'soilt1', 'soilt2', 'soilt3', 'soilt4'/)   !&
+        ! (/"snow_level_ice", "temperature_snow",    &  !"snow_level_liquid",       &
+        ! "soil_moisture_vol", "temperature_soil"/) 
+
+! Forcing
+! lrad and temp additive errors, rest multiplicative
+! Threshold 
+! !> Ensure downward longwave radition doesn’t have a negative (upward) values—due to its additive perturbation 
+
+! ! States: Considered the following 
+!     snow_level_ice(time, snow_levels, location)         mm
+!     snow_level_liquid(time, snow_levels, location)      mm 
+!     temperature_snow(time, snow_levels, location) ;
+!     soil_liquid_vol(time, soil_levels, location) ;
+!     soil_moisture_vol(time, soil_levels, location) volumetric moisture content m3/m3
+!     temperature_soil(time, soil_levels, location)  soil level temp K
+!
+! Snow: forcing perturbation is enough to get sufficient variance. can in the future perturb snow_level_ice and temperature_snow
+! Soil: perturb layer soil_moisture_vol, temperature_soil (smc and stc)
+!       each layer var specified separately (to help handle correlation below)
+        ! also correspond to the increment vars in GSI and land IAU 
+        ! 'slc1', 'slc2', 'slc3', 'slc4', 'soilt1', 'soilt2', 'soilt3', 'soilt4'
+! ! Correlations
+!         1. Errors: multiplicative for snow mass and soil moisture, additive for temp
+!         2. Threshold: ensure smc does not go beyond 1
+!         3. Temp and Mass/moisture not correlated
+!         4. snow and soil not correlated
+!         5. Correlation between layers (for each variable)            
+!             5.1 (first test) apply same random errors
+!             5.2 generate same samples; scale by (inverse of ?) layer size. 
+!                     To ensure proportionate error or to avoid unrealistically big errors on the lower layers?
+!                     Ask Clara about this
+!             5.3 specify correlation (high) and generate (correlated) individual samples
+!             5.4 independent random errors
+!  ! upper limits for smv   
+
+    NAMELIST/NAMENS/ IDIM, JDIM, NUM_TILES, i_layout, j_layout, IY, IM, ID, IH, FH, DELTSFC, &
                     horz_len_scale, ver_len_scale, temp_len_scale, ens_size, &
                     t_len, t_indx, &
-                    static_filename, fv3_prefix, vector_prefix, rand_var, &
-                    PRINTRANK, print_debg_info, n_surf_vars, &
-                    vector_size, forc_inp_path, forc_inp_file, std_dev_f, forc_var_list,  &
-                    perturb_state, state_file_name, state_var_name               
+                    static_filename, fv3_prefix, vector_prefix, vector_size, &    !rand_var, &
+                    PRINTRANK, print_debg_info, & 
+                    perturb_forcing, forc_inp_path, forc_inp_file, n_forc_vars, forc_var_list, std_dev_f, forc_ens_pert_type, &
+                    perturb_state, state_file_name, n_state_vars, state_var_list, std_dev_s, state_ens_pert_type               
     !
     DATA IDIM,JDIM,NUM_TILES, i_layout, j_layout/96,96,6, 1, 1/ 
     DATA IY,IM,ID,IH,FH/1997,8,2,0,0./
@@ -166,59 +199,25 @@
     DATA ens_size/20/
     Data t_len/24/
     DATA t_indx/2/
-    DATA print_debg_info/.false./
-    DATA PRINTRANK/4/
+    
     DATA static_filename/""/
     DATA fv3_prefix/"./"/
     DATA vector_prefix/""/
-    DATA rand_var/"smc"/
-    Data vector_size/18360/
-    Data n_surf_vars/6/
-    Data forc_inp_path/"./"/
-    Data forc_inp_file/"C96_GDAS_forcing_2019-12-15.nc"/   
-    Data std_dev_f/0.1, 0.05, 20.0, 2.0, 0.05, 0.05, 0.1, 0.01/ 
-    Data forc_var_list/"precipitation", "solar_radiation",   &
-            "longwave_radiation", "temperature",           &
-            "wind_speed", "specific_humidity", "precipitation_conserve", &
-            "surface_pressure"/ !not being perturbed atm   
-    Data perturb_state/.false./
-    Data state_file_name/"ufs_land_restart.2020-01-01_00-00-00.nc"/
-    Data state_var_name/"snwdph"/
+    ! DATA rand_var/"smc"/
+    ! Data vector_size/18360/
+    ! DATA print_debg_info/.false./
+    ! DATA PRINTRANK/4/
+    ! Data n_forc_vars/6/
+    ! Data forc_inp_path/"./"/
+    ! Data forc_inp_file/"C96_GDAS_forcing_2019-12-15.nc"/   
 
-    ! DATA obs_srch_rad/250.0/   
-    ! DATA stdev_obsv_depth/40.0/
-    ! DATA stdev_obsv_sncov/80.0/
-    ! DATA stdev_back/30.0/
+    ! Data std_dev_f/0.1, 0.05, 20.0, 2.0, 0.05, 0.05/  
+    ! Data perturb_state/.false./
+    ! Data state_file_name/"ufs_land_restart.2020-01-01_00-00-00.nc"/
+    ! Data n_state_vars/10/
     ! DATA num_assim_steps/1/  ! For multiple time steps of assimilation
     ! DATA dT_Asssim/24.0/     ! hrs. For multiple time steps of assimilation
     
-    namelist /gfs_physics_nml/do_sppt,do_skeb,do_shum,lndp_type,n_var_lndp
-    
-    nlunit=23
-    open (unit=nlunit, file='input.nml', READONLY, status='OLD')
-    n_var_lndp=0
-    lndp_type=0
-    do_sppt=.false.
-    do_shum=.false.
-    do_skeb=.false.
-    read(nlunit,gfs_physics_nml)
-    close(nlunit)
-    ! define stuff
-    pi=3.14159265359
-    undef=9.99e+20
-    p1000=100000.0
-    !define mid-layer pressure
-    rd=287.0
-    cp=1004.0
-    DO k=1,nlevs
-    pressi(k)=ak(k)+p1000*bk(k)
-    ENDDO
-    ex3d=cp*(pressi/p1000)**(rd/cp)
-    DO k=1,nlevs
-    exn = (ex3d(k)*pressi(k)-ex3d(k+1)*pressi(k+1))/((cp+rd)*(pressi(k)-pressi(k+1)))
-    pressl(k)=p1000*exn**(cp/rd)
-    ENDDO    
-
     ! print*, "starting stanalone stochy"
     call fms_init()
     ! print*, "starting stanalone stochy 2"
@@ -234,14 +233,34 @@
     if (myrank==0) PRINT*," running GenEnsForc RANK WITH", NPROCS, "TASKS"
     ! PRINT*," running GenEnsForc  RANK ", MYRANK, " WITH ", NPROCS, "TASKS"
 
+    ! define stuff
+    pi=3.14159265359
+    undef=9.99e+20
+    p1000=100000.0
+
+    ! !define mid-layer pressure
+    ! rd=287.0
+    ! cp=1004.0
+    ! DO k=1,nlevs
+    !     pressi(k)=ak(k)+p1000*bk(k)
+    ! ENDDO
+    ! ex3d=cp*(pressi/p1000)**(rd/cp)
+    ! DO k=1,nlevs
+    !     exn = (ex3d(k)*pressi(k)-ex3d(k+1)*pressi(k+1))/((cp+rd)*(pressi(k)-pressi(k+1)))
+    !     pressl(k)=p1000*exn**(cp/rd)
+    ! ENDDO 
+
     ! PRINT*,"READING NAMELIST."
     ! CALL BAOPENR(360, "tiles_to_vector.nml", IERR)             !"snowDA.nml"   !
-    open(360, file="generate_ens_forc.nml", form="formatted")
-    read(360, NAMSNO)
-    ! READ(360, NML=NAMSNO)
+    open(360, file="generate_ens_forc_state.nml", form="formatted")
+    read(360, NAMENS)
     close(360)    
-    IF (MYRANK==0) WRITE(6, NAMSNO)
+    IF (MYRANK==0) WRITE(6, NAMENS)
     ! LENSFC = IDIM*JDIM ! TOTAL NUMBER OF POINTS FOR THE CUBED-SPHERE TILE
+    
+    ! n_surf_vars = n_forc_vars + n_state_vars 
+    ! n_var_lndp = n_surf_vars
+    lndp_type = 2
     
     !   comm_world = comm_world
     my_id=mpp_pe()
@@ -321,28 +340,10 @@
             ! print*, "proc ", my_id, " of ", ntasks
             call atmosphere_init_stub (grid_box)
         endif
-    Enddo
-    ! if (myrank < 6 ) then
-    !     call mpp_set_current_pelist(tile_members(1,:))
-    !     print*, "pelist 1"
-    !     my_id=mpp_pe()
-    !     ntasks=mpp_npes()
-    !     print*, "proc ", my_id, " of ", ntasks
-    !     call atmosphere_init_stub (grid_box)
-    ! else
-    !     call mpp_set_current_pelist(tile_members(2,:))
-    !     print*, "pelist 2"
-    !     my_id=mpp_pe()
-    !     ntasks=mpp_npes()
-    !     print*, "proc ", my_id, " of ", ntasks
-    !     call atmosphere_init_stub (grid_box)
-    ! endif 
+    Enddo 
 
     call mpp_set_current_pelist()
-    ! my_id=mpp_pe()
-    ! ntasks=mpp_npes()
-    ! print*, "global scope"
-    ! print*, "proc ", my_id, " of ", ntasks
+
     ! CALL MPI_BARRIER(MPI_COMM_WORLD, IERR)
     isd=Atm(1)%bd%isd
     ied=Atm(1)%bd%ied
@@ -354,10 +355,6 @@
     jec=Atm(1)%bd%jec
     nx=iec-isc+1
     ny=jec-jsc+1
-
-    ! allocate(workg(nx,ny))
-    ! allocate(tile_number(nx,ny))
-    ! allocate(workg3d(nx,ny,nlevs))
 
     if (p_gRank==0) then
         print*, "pe group", p_gN + 1
@@ -434,7 +431,7 @@
         minval(xlat), maxval(xlat)
     endif
     
-    allocate(grid_xt(nx),grid_yt(ny))
+    allocate(grid_xt(nx), grid_yt(ny))
     do i=1,nx
     grid_xt(i)=i
     enddo
@@ -442,16 +439,7 @@
     grid_yt(j)=j
     enddo
     !     endif
-    ! enddo
-
-    ! forc_var_list(1) = "temperature" 
-    ! forc_var_list(2) = "precipitation_bilinear"
-    ! forc_var_list(3) = "precipitation_conserve"
-    ! forc_var_list(4) = "solar_radiation"
-    ! forc_var_list(5) = "longwave_radiation"
-    ! forc_var_list(6) = "specific_humidity"
-    ! forc_var_list(7) = "wind_speed"
-    ! forc_var_list(8) = "surface_pressure"     
+    ! enddo  
 
     ! vector_size = LENS_OUT
     allocate(tile_xy(vector_size))
@@ -475,16 +463,11 @@
         ! print*, "OROG", OROG_land
     Endif
 
-    ! allocate(vector_rand_Ta(vector_size))
-
-    ! allocate(rand_Ta(LENSFC), rand_Prec(LENSFC), rand_sRad(LENSFC))
-    ! allocate(rand_lRad(LENSFC),rand_sHum(LENSFC), rand_wSpeed(LENSFC))
     allocate(rand_Ta3D(NUM_TILES, JDIM, IDIM))
-    
-    ! Read fv3    
+     
     !workg_T162_984x488.tile03.nc 
-    allocate(sfc_wts_out(JDIM / j_layout, IDIM / i_layout, n_surf_vars))
     allocate(forcArray(vector_size))  !, t_len))
+    ! allocate(stateArray(vector_size, layer_dim_max))  !, t_len))
     allocate(vector_rand_ens(vector_size))  !, t_len))
 
     !apply inter-variable corr LL^T = C; Y = L*X
@@ -520,50 +503,156 @@
     ! print*,'calling init_stochastic_physics',nlevs
     allocate(input_nml_file(1))
     input_nml_file='input.nml'
-    do_sppt=.false.
-    do_shum=.false.
-    do_skeb=.false.
-    ! call init_stochastic_physics(nlevs, blksz, dtp, sppt_amp,                         &
-    !         input_nml_file, fn_nml, nlunit, xlon, xlat, do_sppt, do_shum,                &
-    !         do_skeb, lndp_type, n_var_lndp, use_zmtnblck, skeb_npass, &
-    !         lndp_var_list, lndp_prt_list,    &
-    !         ak, bk, nthreads, root_pe, comm, ierr)
-    ! if (ierr .ne. 0) print *, 'ERROR init_stochastic_physics call' ! Draper - need proper error trapping here
-    if (do_sppt) allocate(sppt_wts(nblks,blksz_1,nlevs))
-    if (do_shum) allocate(shum_wts(nblks,blksz_1,nlevs))
-    if (do_skeb) allocate(skebu_wts(nblks,blksz_1,nlevs))
-    if (do_skeb) allocate(skebv_wts(nblks,blksz_1,nlevs))
-    if (lndp_type > 0) allocate(sfc_wts(nblks,blksz_1,n_var_lndp))
-    ! allocate(sppt_wts(nblks,blksz_1,nlevs))
-    ! allocate(shum_wts(nblks,blksz_1,nlevs))
-    ! allocate(skebu_wts(nblks,blksz_1,nlevs))
-    ! allocate(skebv_wts(nblks,blksz_1,nlevs))
-    ! allocate(sfc_wts(nblks,blksz_1,n_var_lndp))
-    
+    ! do_sppt=.false.
+    ! do_shum=.false.
+    ! do_skeb=.false.
+
     comm = comm_tile(p_gN+1)    !MPI_COMM_WORLD
     root_pe = 0  !if (p_gRank == 0)  root_pe = myrank  ! mpp_root_pe()   
     
     ! Np_til = NPROCS / NUM_TILES  ! num tile groups    
     ! p_gN = MYRANK / NUM_TILES  ! group for proc.  
     ! p_gRank = MOD(MYRANK, NUM_TILES)  ! proc. rank within group
+    
+    if (perturb_forcing) then 
 
-    ! WRITE(proc_str, '(I0)') myrank
-    Do ie = p_gN*(ens_size/Np_til)+1, (p_gN+1)*(ens_size/Np_til)  !ens_size
-        WRITE(ensCH, '(I0)') ie
-        write(mem_str, '(I3.3)') ie
-        stoch_ini_file = TRIM(forc_inp_path)//'/RESTART/stochy_final_ens'//TRIM(ensCH)//'.nc'
-        if (p_gRank == 0) then  
-            forc_inp_file_ens=TRIM(forc_inp_path)//"/mem"//TRIM(mem_str)//"/"//TRIM(forc_inp_file)
-            ! forcing file
-            INQUIRE(FILE=trim(forc_inp_file_ens), EXIST=file_exists)
-            if (.not. file_exists) then 
-                print *, 'error,file does not exist ', trim(forc_inp_file_ens) , ' exiting'
-                call MPI_ABORT(MPI_COMM_WORLD, 10, error) 
+        n_var_lndp = n_forc_vars
+        allocate(sfc_wts(nblks, blksz_1, n_var_lndp))
+        allocate(sfc_wts_out(JDIM / j_layout, IDIM / i_layout, n_var_lndp))
+
+        ! WRITE(proc_str, '(I0)') myrank
+        Do ie = p_gN*(ens_size/Np_til)+1, (p_gN+1)*(ens_size/Np_til)  !ens_size
+            WRITE(ensCH, '(I0)') ie
+            write(mem_str, '(I3.3)') ie
+            stoch_ini_file = TRIM(forc_inp_path)//'/RESTART/stochy_final_ens_forc'//TRIM(ensCH)//'.nc'
+            if (p_gRank == 0) then  
+                forc_inp_file_ens=TRIM(forc_inp_path)//"/mem"//TRIM(mem_str)//"/"//TRIM(forc_inp_file)
+                ! forcing file
+                INQUIRE(FILE=trim(forc_inp_file_ens), EXIST=file_exists)
+                if (.not. file_exists) then 
+                    print *, 'error,file does not exist ', trim(forc_inp_file_ens) , ' exiting'
+                    call MPI_ABORT(MPI_COMM_WORLD, 10, error) 
+                endif
+                error = nf90_open(trim(forc_inp_file_ens), NF90_WRITE, ncid)
+                call netcdf_err(error, 'opening forcing file' )
             endif
-            error = nf90_open(trim(forc_inp_file_ens), NF90_WRITE, ncid)
-            call netcdf_err(error, 'opening forcing file' )
 
-            if (perturb_state) then
+            call init_stochastic_physics_land(nlevs, blksz, dtp,              &   !sppt_amp,                         &
+                input_nml_file, stoch_ini_file, fn_nml, nlunit, xlon, xlat,   &  ! do_sppt, do_shum, do_skeb, lndp_type,                &
+                n_var_lndp, use_zmtnblck,   &  !skeb_npass, lndp_var_list, lndp_prt_list,    &
+                ak, bk, nthreads, root_pe, comm_tile(p_gN+1), ierr)
+            if (ierr .ne. 0) then 
+                print *, 'ERROR init_stochastic_physics call'
+                call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
+            endif
+            !if (p_gRank == 0) then
+            !    print*, " pe group", p_gN + 1, " Done init_stochy, ens ", ie, " time ", it    
+            !endif
+            
+            Do it=1, t_len
+                call run_stochastic_physics_land(nlevs, it-1, fhour, blksz, nthreads=nthreads, sfc_wts=sfc_wts)
+                            ! sppt_wts=sppt_wts, shum_wts=shum_wts, skebu_wts=skebu_wts, skebv_wts=skebv_wts,                         
+                ! run_stochastic_physics_land(levs, kdt, fhour, blksz, nthreads, sfc_wts) 
+
+                ! do l=1,n_var_lndp
+                !     do j=1,ny
+                !         sfc_wts_out(l,:,j)=sfc_wts(j,:,l)
+                !     enddo
+                ! enddo
+
+                !apply inter-variable corr L on P Qsi Qli Y = L*X; LL^T = C
+                sfc_wts_out =  sfc_wts
+                sfc_wts_out(:,:,2) =  L_cov(2,1) * sfc_wts(:,:,1) + &
+                                    L_cov(2,2) * sfc_wts(:,:,2) !+ &
+                                    !   L_cov(2,3) * sfc_wts(:,:,3)  L_cov(2,3)=0.
+                sfc_wts_out(:,:,3) =  L_cov(3,1) * sfc_wts(:,:,1) + &
+                                    L_cov(3,2) * sfc_wts(:,:,2) + &
+                                    L_cov(3,3) * sfc_wts(:,:,3)
+
+                !if (p_gRank == 0) then
+                !    print*, " pe group", p_gN + 1, " Done run_stochy, ens ", ie, " time ", it    
+                !endif
+
+                Do ixy = 1, n_var_lndp        !vector_length 
+                    if (p_gRank /= 0) then  
+                        call MPI_SEND(sfc_wts_out(:,:,ixy), JDIM*IDIM/(j_layout*i_layout), mpiReal_size, 0, &
+                                        10*(p_gRank+1)+ixy, comm_tile(p_gN+1), IERR) 
+                    else
+    !rand_Ta3D(6, JDIM * j_layout, IDIM * i_layout))
+                        ! isc,iec,jsc,jec             
+                        rand_Ta3D(my_tile,jsc:jec,isc:iec) = sfc_wts_out(:,:,ixy)
+                        Do iproc = 1, tot_subtiles-1 
+                            ! call MPI_RECV(rand_Ta3D(iproc+1,:,:),JDIM*IDIM, mpiReal_size, &
+                            call MPI_RECV(rand_Ta3D(pg_bindx(iproc+1,1), pg_bindx(iproc+1,2):pg_bindx(iproc+1,3), &
+                                                    pg_bindx(iproc+1,4):pg_bindx(iproc+1,5)), &
+                                                    JDIM*IDIM/(j_layout*i_layout), mpiReal_size, &                        
+                            iproc, 10*(iproc+1)+ixy, comm_tile(p_gN+1), MPI_STATUS_IGNORE, IERR)
+                        Enddo
+                        Do iv=1, vector_size 
+                            vector_rand_ens(iv) = rand_Ta3D(tile_xy(iv), Jdim_xy(iv), Idim_xy(iv))
+                        end do
+
+                        ! Start writing forcing file
+                        error = nf90_inq_varid(ncid, trim(forc_var_list(ixy)), varid)
+                        call netcdf_err(error, 'getting varid '//trim(forc_var_list(ixy)) )
+                        !read
+                        ERROR=NF90_GET_VAR(NCID, varid, forcArray, &
+                                start = (/1,it/), count = (/vector_size, 1/))
+                        CALL NETCDF_ERR(ERROR, 'ERROR READING '//trim(forc_var_list(ixy)) )                  
+                        ! print*, trim(forc_var_list(ixy))
+                        ! print*, forcArray
+                        ! print*, "rand pattern"
+                        ! print*, vector_rand_ens
+                        if (forc_ens_pert_type(ixy) == 1) then 
+                        ! pert_factors = 1 + std_dev * corr_rand
+                            vector_rand_ens = 1.0 + (std_dev_f(ixy) * vector_rand_ens)
+                            forcArray = vector_rand_ens * forcArray 
+                        else
+                            ! pert_factors = target_mean(0.0) + std_dev * corr_rand
+                            vector_rand_ens = std_dev_f(ixy) * vector_rand_ens
+                            forcArray = vector_rand_ens + forcArray
+                        endif
+                        ! print*, trim(forc_var_list(ixy)), " after mult"
+                        ! print*, forcArray
+                        error = nf90_put_var(ncid, varid , forcArray,       &
+                            start = (/1,it/), count = (/vector_size, 1/))
+                        call netcdf_err(error, 'writing '//trim(forc_var_list(ixy)) )
+                    Endif                
+                end do  
+            Enddo
+            if (p_gRank == 0) then
+                error = nf90_close(ncid)
+                call netcdf_err(error, 'closing '//trim(forc_inp_file_ens) ) 
+            endif
+            ! if (stochini) then
+            !     call write_stoch_restart_atm('stochy_final_2_ens'//ensCH//'.nc')
+            !  else
+            call write_stoch_restart_atm(stoch_ini_file)
+            !  endif
+        
+            ! if (p_gRank == 0) PRINT*,"proc ", p_gRank, " finished copying rand for ens ", ie
+
+            call finalize_stochastic_physics()
+        Enddo
+
+        if (allocated(sfc_wts)) deallocate(sfc_wts)
+        if (allocated(sfc_wts_out)) deallocate(sfc_wts_out)
+
+    endif
+    
+    if(perturb_state) then      !.and. (it .eq. 1)
+
+        n_var_lndp = n_state_vars
+        allocate(sfc_wts(nblks, blksz_1, n_var_lndp))
+        allocate(sfc_wts_out(JDIM / j_layout, IDIM / i_layout, n_var_lndp))
+
+        Do ie = p_gN*(ens_size/Np_til)+1, (p_gN+1)*(ens_size/Np_til)  !ens_size
+
+            WRITE(ensCH, '(I0)') ie
+            write(mem_str, '(I3.3)') ie
+            stoch_ini_file = TRIM(forc_inp_path)//'/RESTART/stochy_final_ens_state'//TRIM(ensCH)//'.nc'
+            if (p_gRank == 0) then  
+                ! state file            
                 state_file_ens=TRIM(forc_inp_path)//"/mem"//TRIM(mem_str)//"/"//TRIM(state_file_name)
                 INQUIRE(FILE=trim(state_file_ens), EXIST=file_exists)
                 if (.not. file_exists) then
@@ -573,58 +662,50 @@
                 error = nf90_open(trim(state_file_ens), NF90_WRITE, ncid_st)
                 call netcdf_err(error, 'opening state file '//trim(state_file_ens) )
             endif
-        endif
-        ! IF (p_gRank==0) PRINT*," calling stand alone stochy, ens ", ie
-        do_sppt=.false.
-        do_shum=.false.
-        do_skeb=.false.
-        ! call standalone_stochy_sfc(IDIM, JDIM, n_surf_vars, sfc_wts_out)        
-        call init_stochastic_physics(nlevs, blksz, dtp, sppt_amp,                         &
-            input_nml_file, stoch_ini_file, fn_nml, nlunit, xlon, xlat, do_sppt, do_shum,                &
-            do_skeb, lndp_type, n_var_lndp, use_zmtnblck, skeb_npass, &
-            lndp_var_list, lndp_prt_list,    &
-            ak, bk, nthreads, root_pe, comm_tile(p_gN+1), ierr)
-        if (ierr .ne. 0) then 
-            print *, 'ERROR init_stochastic_physics call'
-            call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
-        endif
-        do_sppt=.false.
-        do_shum=.false.
-        do_skeb=.false.
-        !if (p_gRank == 0) then
-        !    print*, " pe group", p_gN + 1, " Done init_stochy, ens ", ie, " time ", it    
-        !endif
-        
-        Do it=1, t_len
-            call run_stochastic_physics(nlevs, it-1, fhour, blksz, &
-                        sppt_wts=sppt_wts, shum_wts=shum_wts, skebu_wts=skebu_wts, &
-                                        skebv_wts=skebv_wts, sfc_wts=sfc_wts, &
-                                        nthreads=nthreads)
+
+            call init_stochastic_physics_land(nlevs, blksz, dtp,              &       !sppt_amp,                         &
+                input_nml_file, stoch_ini_file, fn_nml, nlunit, xlon, xlat,   &  ! do_sppt, do_shum, do_skeb, lndp_type,                &
+                n_var_lndp, use_zmtnblck,   &  !skeb_npass, lndp_var_list, lndp_prt_list,    &
+                ak, bk, nthreads, root_pe, comm_tile(p_gN+1), ierr)
+            if (ierr .ne. 0) then 
+                print *, 'ERROR init_stochastic_physics call'
+                call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
+            endif
+            !if (p_gRank == 0) then
+            !    print*, " pe group", p_gN + 1, " Done init_stochy, ens ", ie, " time ", it    
+            !endif
+            
+            it = 1   ! perturb only first time step state
+            call run_stochastic_physics_land(nlevs, it-1, fhour, blksz, nthreads=nthreads, sfc_wts=sfc_wts)
+                        ! sppt_wts=sppt_wts, shum_wts=shum_wts, skebu_wts=skebu_wts, skebv_wts=skebv_wts,                         
+            ! run_stochastic_physics_land(levs, kdt, fhour, blksz, nthreads, sfc_wts) 
+
             ! do l=1,n_var_lndp
             !     do j=1,ny
             !         sfc_wts_out(l,:,j)=sfc_wts(j,:,l)
             !     enddo
             ! enddo
-            !apply inter-variable corr L on P Qsi Qli Y = L*X; LL^T = C
-            sfc_wts_out =  sfc_wts
-            sfc_wts_out(:,:,2) =  L_cov(2,1) * sfc_wts(:,:,1) + &
-                                  L_cov(2,2) * sfc_wts(:,:,2) !+ &
-                                !   L_cov(2,3) * sfc_wts(:,:,3)  L_cov(2,3)=0.
-            sfc_wts_out(:,:,3) =  L_cov(3,1) * sfc_wts(:,:,1) + &
-                                  L_cov(3,2) * sfc_wts(:,:,2) + &
-                                  L_cov(3,3) * sfc_wts(:,:,3)
+
+    !>>>> State correlations go here
+    !>>>>
+            ! !apply inter-variable corr L on P Qsi Qli Y = L*X; LL^T = C
+            ! sfc_wts_out =  sfc_wts
+            ! sfc_wts_out(:,:,2) =  L_cov(2,1) * sfc_wts(:,:,1) + &
+            !                       L_cov(2,2) * sfc_wts(:,:,2) !+ &
+            !                     !   L_cov(2,3) * sfc_wts(:,:,3)  L_cov(2,3)=0.
+            ! sfc_wts_out(:,:,3) =  L_cov(3,1) * sfc_wts(:,:,1) + &
+            !                       L_cov(3,2) * sfc_wts(:,:,2) + &
+            !                       L_cov(3,3) * sfc_wts(:,:,3)
 
             !if (p_gRank == 0) then
             !    print*, " pe group", p_gN + 1, " Done run_stochy, ens ", ie, " time ", it    
-            !endif
+            !endif  
 
-            Do ixy = 1, n_surf_vars        !vector_length 
+            Do ixy = 1, n_var_lndp        !vector_length 
                 if (p_gRank /= 0) then  
                     call MPI_SEND(sfc_wts_out(:,:,ixy), JDIM*IDIM/(j_layout*i_layout), mpiReal_size, 0, &
                                     10*(p_gRank+1)+ixy, comm_tile(p_gN+1), IERR) 
-                else
-!rand_Ta3D(6, JDIM * j_layout, IDIM * i_layout))
-                    ! isc,iec,jsc,jec             
+                else           
                     rand_Ta3D(my_tile,jsc:jec,isc:iec) = sfc_wts_out(:,:,ixy)
                     Do iproc = 1, tot_subtiles-1 
                         ! call MPI_RECV(rand_Ta3D(iproc+1,:,:),JDIM*IDIM, mpiReal_size, &
@@ -637,19 +718,19 @@
                         vector_rand_ens(iv) = rand_Ta3D(tile_xy(iv), Jdim_xy(iv), Idim_xy(iv))
                     end do
 
-                    ! Start writing restart file
-                    error = nf90_inq_varid(ncid, trim(forc_var_list(ixy)), varid)
-                    call netcdf_err(error, 'getting varid '//trim(forc_var_list(ixy)) )
+                    ! get var name
+                    call map_layer_var_names(state_var_list(ixy), st_layer_var, st_layer_dim)
+
+                    error = nf90_inq_varid(ncid_st, trim(st_layer_var), varid)
+                    call netcdf_err(error, 'getting varid '//trim(st_layer_var) )
+
                     !read
-                    ERROR=NF90_GET_VAR(NCID, varid, forcArray, &
-                            start = (/1,it/), count = (/vector_size, 1/))
-                    CALL NETCDF_ERR(ERROR, 'ERROR READING '//trim(forc_var_list(ixy)) )                  
-                    ! print*, trim(forc_var_list(ixy))
-                    ! print*, forcArray
-                    ! print*, "rand pattern"
-                    ! print*, vector_rand_ens
-                    if (ens_gen_type(ixy) == 1) then 
-                    ! pert_factors = 1 + std_dev * corr_rand
+                    ERROR=NF90_GET_VAR(ncid_st, varid, forcArray, &
+                            start = (/1, st_layer_dim, it/), count = (/vector_size, 1, 1/))
+                    CALL NETCDF_ERR(ERROR, 'reading values for '//trim(state_var_list(ixy)) ))                  
+
+                    if (state_ens_pert_type(ixy) == 1) then 
+                        ! pert_factors = 1 + std_dev * corr_rand
                         vector_rand_ens = 1.0 + (std_dev_f(ixy) * vector_rand_ens)
                         forcArray = vector_rand_ens * forcArray 
                     else
@@ -657,57 +738,36 @@
                         vector_rand_ens = std_dev_f(ixy) * vector_rand_ens
                         forcArray = vector_rand_ens + forcArray
                     endif
-                    ! print*, trim(forc_var_list(ixy)), " after mult"
-                    ! print*, forcArray
-                    error = nf90_put_var(ncid, varid , forcArray,       &
-                        start = (/1,it/), count = (/vector_size, 1/))
-                    call netcdf_err(error, 'writing '//trim(forc_var_list(ixy)) )
 
-                    if(perturb_state .and. it == 1 .and. ixy == 1 ) then
+                    error = nf90_put_var(ncid_st, varid , forcArray,       &
+                    start = (/1, st_layer_dim, it/), count = (/vector_size, 1, 1/))
+                    call netcdf_err(error, 'writing '//trim(state_var_list(ixy)) )
+                Endif       
 
-                        error = nf90_inq_varid(ncid_st, trim(state_var_name), varid)
-                        call netcdf_err(error, 'getting varid '//trim(state_var_name) )
-                        !read
-                        ERROR=NF90_GET_VAR(ncid_st, varid, forcArray, &
-                                start = (/1,it/), count = (/vector_size, 1/))
-                        CALL NETCDF_ERR(ERROR, 'ERROR READING '//trim(state_var_name) )
+            end do         
 
-                        forcArray = vector_rand_ens * forcArray
-                        ! print*, trim(forc_var_list(ixy)), " after mult"
-                        ! print*, forcArray
-
-                        error = nf90_put_var(ncid_st, varid , forcArray,       &
-                            start = (/1,it/), count = (/vector_size, 1/))
-                        call netcdf_err(error, 'writing '//trim(state_var_name) )
-                    endif
-
-                Endif                
-            end do             
-        Enddo
-        if (p_gRank == 0) then
-            error = nf90_close(ncid)
-            call netcdf_err(error, 'closing '//trim(forc_inp_file_ens) ) 
-
-            if (perturb_state) then
+            if (p_gRank == 0) then
                 error = nf90_close(ncid_st)
                 call netcdf_err(error, 'closing '//trim(state_file_ens) )
             endif
-        endif
-        ! if (stochini) then
-        !     call write_stoch_restart_atm('stochy_final_2_ens'//ensCH//'.nc')
-        !  else
-        call write_stoch_restart_atm(stoch_ini_file)
-        !  endif
-    
-        ! if (p_gRank == 0) PRINT*,"proc ", p_gRank, " finished copying rand for ens ", ie
+            ! if (stochini) then
+            !     call write_stoch_restart_atm('stochy_final_2_ens'//ensCH//'.nc')
+            !  else
+            call write_stoch_restart_atm(stoch_ini_file)
+            !  endif
+        
+            ! if (p_gRank == 0) PRINT*,"proc ", p_gRank, " finished copying rand for ens ", ie
 
-        call finalize_stochastic_physics()
-    Enddo
-    if (do_sppt) deallocate(sppt_wts)
-    if (do_shum) deallocate(shum_wts)
-    if (do_skeb) deallocate(skebu_wts)
-    if (do_skeb) deallocate(skebv_wts)
-    if (lndp_type > 0) deallocate(sfc_wts)
+            call finalize_stochastic_physics()
+
+        Enddo
+
+        if (allocated(sfc_wts)) deallocate(sfc_wts)
+        if (allocated(sfc_wts_out)) deallocate(sfc_wts_out)
+
+    End if
+
+
     
     Deallocate(tile_members)
     Deallocate(tile_group)
@@ -725,8 +785,8 @@
     ! deallocate(rand_Ta, rand_Prec, rand_sRad)
     ! deallocate(rand_lRad, rand_sHum, rand_wSpeed)    
     deallocate(rand_Ta3D)
-    deallocate(sfc_wts_out)
     deallocate(forcArray)
+    if (allocated(stateArray)) deallocate(stateArray)
     deallocate(vector_rand_ens)
     deallocate(C_cov, L_cov)    
    
@@ -765,6 +825,44 @@
             end if
 
         end function matsqrt
+        
+        subroutine map_layer_var_names(in_var_name, out_var_name, layer_dim)  !, error)
+            implicit none
+            character (len=*),   intent(in) :: in_var_name
+            character (len=24),  intent(in) :: out_var_name
+            integer,            intent(out) :: layer_dim
+            ! integer,          intent(out) :: error
+            integer                         :: iostat
+
+        select case (trim(in_var_name))
+
+            case('slc1', 'slc2', 'slc3', 'slc4') 
+                out_var_name = "soil_moisture_vol"
+                read(trim(in_var_name)(4, 4), *, iostat=iostat)  layer_dim                
+                if (iostat /= 0) then 
+                    print*, "error getting layer information from "//trim(in_var_name)
+                    call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
+                endif
+                if (rank == 0) print*,"doing state perturbation for "//trim(in_var_name)
+
+            case('soilt1', 'soilt2', 'soilt3', 'soilt4') 
+                out_var_name = "temperature_soil"
+                read(trim(in_var_name)(6, 6), *, iostat=iostat)  layer_dim                
+                if (iostat /= 0) then 
+                    print*, "error getting layer information from "//trim(in_var_name)
+                    call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
+                endif
+                if (rank == 0) print*,"doing state perturbation for "//trim(in_var_name)
+
+            case default
+                print*, 'ERROR: unknown land state variable. Variable must be one of :',   &
+                        'slc1', 'slc2', 'slc3', 'slc4', 'soilt1', 'soilt2', 'soilt3', 'soilt4'
+            
+                call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
+
+        end select 
+
+        end subroutine map_layer_var_names
 
  END Program GenEnsForc
 

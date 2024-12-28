@@ -10,7 +10,8 @@
       implicit none
 
       public
-      integer, parameter :: max_n_var_lndp = 6 ! must match value used in GFS_typedefs
+      ! integer, parameter :: max_n_var_lndp = 6 ! must match value used in GFS_typedefs
+      integer, parameter :: max_n_var_lndp = 16 ! use land forcing and state vars
       integer nssppt,nsshum,nsepbl,nsocnsppt,nsskeb,lon_s,lat_s,ntrunc
 
 ! pjp stochastic phyics
@@ -32,7 +33,7 @@
       logical use_zmtnblck
       logical do_shum,do_sppt,do_skeb,pert_epbl,do_ocnsppt
 
-      real(kind=kind_dbl_prec), dimension(5) :: lndp_lscale,lndp_tau
+      real(kind=kind_dbl_prec), dimension(5) :: lndp_lscale, lndp_tau
       integer n_var_lndp
       integer(8),dimension(5) ::iseed_lndp
       integer lndp_type

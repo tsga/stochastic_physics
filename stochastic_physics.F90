@@ -8,8 +8,8 @@ implicit none
 
 private
 
-public :: init_stochastic_physics,init_stochastic_physics_ocn
-public :: run_stochastic_physics,run_stochastic_physics_ocn
+public :: init_stochastic_physics,init_stochastic_physics_ocn, init_stochastic_physics_land
+public :: run_stochastic_physics, run_stochastic_physics_ocn, run_stochastic_physics_land
 public :: finalize_stochastic_physics
 
 contains
@@ -222,6 +222,117 @@ RNLAT=gg_lats(1)*2-gg_lats(2)
 
 end subroutine init_stochastic_physics
 
+!>@brief The subroutine 'init_stochastic_physics_land' initializes the stochastic
+!!pattern genertors, only for land
+!>@details It reads the stochastic physics namelist (nam_stoch and nam_sfcperts)
+!allocates and polulates the necessary arrays
+
+subroutine init_stochastic_physics_land(levs, blksz, dtp, input_nml_file_in, stoch_ini_file, fn_nml, nlunit, &
+   xlon, xlat, &           !do_sppt_in, do_shum_in, do_skeb_in, lndp_type_in, 
+   n_var_lndp_in, use_zmtnblck_out,     &   ! skeb_npass_out, lndp_var_list_out, lndp_prt_list_out,    &
+   ak, bk, nthreads, mpiroot, mpicomm, iret) 
+!\callgraph
+!use stochy_internal_state_moa
+   use stochy_data_mod, only : init_stochdata,gg_lats,gg_lons,nsppt, &
+                              rad2deg,INTTYP,wlon,rnlat,gis_stochy,vfact_skeb,vfact_sppt,vfact_shum,skeb_vpts,skeb_vwts,sl
+   use stochy_namelist_def
+   use spectral_transforms,only:colrad_a,latg,lonf,skeblevs
+   use mpi_wrapper, only : mpi_wrapper_initialize,mype,npes,is_rootpe
+
+   implicit none
+   integer, intent(out)                    :: iret
+
+   ! Interface variables
+   character(len=*),         intent(in)    :: stoch_ini_file !11.8.21 TZG input init pattern file
+   integer,                  intent(in)    :: levs, nlunit, nthreads, mpiroot, mpicomm
+   integer,                  intent(in)    :: blksz(:)
+   real(kind=kind_dbl_prec), intent(in)    :: dtp
+   ! real(kind=kind_dbl_prec), intent(out)   :: sppt_amp
+   character(len=*),         intent(in)    :: input_nml_file_in(:)
+   character(len=*),         intent(in)    :: fn_nml
+   real(kind=kind_dbl_prec), intent(in)    :: xlon(:,:)
+   real(kind=kind_dbl_prec), intent(in)    :: xlat(:,:)
+   ! logical,                  intent(in)    :: do_sppt_in, do_shum_in, do_skeb_in 
+   integer,                  intent(in)    :: n_var_lndp_in   ! lndp_type_in, 
+   real(kind=kind_dbl_prec), intent(in)    :: ak(:), bk(:) 
+   logical,                  intent(out)   :: use_zmtnblck_out
+   ! integer,                  intent(out)   :: skeb_npass_out
+   ! character(len=3), dimension(max_n_var_lndp),         intent(out) :: lndp_var_list_out
+   ! real(kind=kind_dbl_prec), dimension(max_n_var_lndp), intent(out) :: lndp_prt_list_out
+
+   ! Local variables
+   real(kind=kind_dbl_prec), parameter     :: con_pi =4.0d0*atan(1.0d0)
+   integer :: nblks,len
+   real*8 :: PRSI(levs),PRSL(levs),dx
+   ! real, allocatable :: skeb_vloc(:)
+   integer :: k,kflip,latghf,blk,k2
+   character*2::proc
+
+   ! Initialize MPI and OpenMP
+   call mpi_wrapper_initialize(mpiroot,mpicomm)
+   gis_stochy%nodes = npes
+   gis_stochy%mype = mype
+   gis_stochy%nx = maxval(blksz)
+   nblks = size(blksz)
+   gis_stochy%ny = nblks
+   rad2deg=180.0/con_pi
+
+   ! ------------------------------------------
+   nblks = size(blksz)
+   allocate(gis_stochy%len(nblks))
+   allocate(gis_stochy%parent_lons(gis_stochy%nx,gis_stochy%ny))
+   allocate(gis_stochy%parent_lats(gis_stochy%nx,gis_stochy%ny))
+   do blk=1,nblks
+      len=blksz(blk)
+      gis_stochy%parent_lons(1:len,blk)=xlon(blk,1:len)*rad2deg
+      gis_stochy%parent_lats(1:len,blk)=xlat(blk,1:len)*rad2deg
+      gis_stochy%len(blk)=len
+   enddo
+
+   ! replace
+   INTTYP=0 ! bilinear interpolation
+   call init_stochdata_land(levs, dtp, n_var_lndp_in, input_nml_file_in,trim(stoch_ini_file),fn_nml,nlunit,iret)
+   !print*,'back from init stochdata',iret
+   if (iret .ne. 0) return
+
+   ! check namelist entries for consistency
+   if (n_var_lndp_in /=  n_var_lndp) then
+      print*,'n_var_lndp',n_var_lndp_in , n_var_lndp
+      write(0,'(*(a))') 'Logic error in stochastic_physics_init: incompatible', &
+                        & ' namelist settings n_var_lndp_in and n_var_lndp'
+      iret = 20 
+      return
+   end if
+   
+   ! update remaining model configuration parameters from namelist
+   use_zmtnblck_out=use_zmtnblck
+   ! if ( lndp_type==0 ) return
+   ! lndp_var_list_out=lndp_var_list
+   ! lndp_prt_list_out=lndp_prt_list
+
+   allocate(sl(levs))
+   do k=1,levs
+      sl(k)= 0.5*(ak(k)/101300.+bk(k)+ak(k+1)/101300.0+bk(k+1)) ! si are now sigmas
+   enddo
+   
+   ! get interpolation weights
+   ! define gaussian grid lats and lons
+   latghf=latg/2
+   allocate(gg_lats(latg))
+   allocate(gg_lons(lonf))
+   do k=1,latghf
+   gg_lats(k)=-1.0*colrad_a(latghf-k+1)*rad2deg
+   gg_lats(latg-k+1)=-1*gg_lats(k)
+   enddo
+   dx=360.0/lonf
+   do k=1,lonf
+   gg_lons(k)=dx*(k-1)
+   enddo
+   WLON=gg_lons(1)-(gg_lons(2)-gg_lons(1))
+   RNLAT=gg_lats(1)*2-gg_lats(2)
+
+end subroutine init_stochastic_physics_land
+
 !!!!!!!!!!!!!!!!!!!!
 subroutine init_stochastic_physics_ocn(delt,geoLonT,geoLatT,nx,ny,nz,pert_epbl_in,do_sppt_in, &
                                        mpiroot, mpicomm, iret)
@@ -410,6 +521,64 @@ endif
 
 
 end subroutine run_stochastic_physics
+
+!>@brief The subroutine 'run_stochastic_physics_land' updates the random patterns if
+!!necessary (for land only)
+!>@details It updates the AR(1) in spectral space
+!allocates and polulates the necessary arrays
+
+subroutine run_stochastic_physics_land(levs, kdt, fhour, blksz, nthreads, sfc_wts) 
+   ! sppt_wts, shum_wts, skebu_wts, skebv_wts, 
+
+!\callgraph
+!use stochy_internal_state_mod   
+   use stochy_data_mod, only : gis_stochy, rpattern_sfc, nlndp
+   ! use stochy_data_mod, only : nshum,rpattern_shum,rpattern_sppt,nsppt,rpattern_skeb,nskeb,vfact_sppt,vfact_shum,vfact_skeb,&
+   use get_stochy_pattern_mod,only : get_random_pattern_scalar,get_random_pattern_vector, & 
+                                    get_random_pattern_sfc
+   use stochy_namelist_def, only : lndp_type, n_var_lndp  !do_shum,do_sppt,do_skeb,nssppt,nsshum,nsskeb,sppt_logit,    & 
+                                 
+   use mpi_wrapper, only: is_rootpe
+
+   implicit none
+
+   ! Interface variables
+   integer,                  intent(in) :: levs, kdt
+   real(kind=kind_dbl_prec), intent(in) :: fhour
+   integer,                  intent(in) :: blksz(:)
+   integer,                  intent(in)    :: nthreads
+   real(kind=kind_dbl_prec), intent(inout) :: sfc_wts(:,:,:)
+
+   real,allocatable :: tmpl_wts(:,:,:)
+   !D-grid
+   integer :: k
+   integer j,ierr,i
+   integer :: nblks, blk, len, maxlen
+   character*120 :: sfile
+   character*6   :: STRFH
+   logical :: do_advance_pattern
+
+   ! if ( lndp_type==0 ) return
+
+   ! Update number of threads in shared variables in spectral_layout_mod and set block-related variables
+   nblks = size(blksz)
+   maxlen = maxval(blksz(:))
+
+   ! if ( lndp_type .EQ. 2  ) then 
+   ! add time check?
+   allocate(tmpl_wts(gis_stochy%nx,gis_stochy%ny,n_var_lndp))
+   call get_random_pattern_sfc(rpattern_sfc,nlndp,gis_stochy,tmpl_wts)
+   DO blk=1,nblks
+      len=blksz(blk)
+      ! for perturbing vars or states, saved value is N(0,1)  and apply scaling later.
+      DO k=1,n_var_lndp
+         sfc_wts(blk,1:len,k) = tmpl_wts(1:len,blk,k)
+      ENDDO
+   ENDDO
+   deallocate(tmpl_wts)
+   ! endif
+
+end subroutine run_stochastic_physics_land
 
 subroutine run_stochastic_physics_ocn(sppt_wts,t_rp1,t_rp2)
 !use MOM_forcing_type, only : mech_forcing
