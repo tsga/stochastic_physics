@@ -595,7 +595,7 @@
                         !read
                         ERROR=NF90_GET_VAR(NCID, varid, forcArray, &
                                 start = (/1,it/), count = (/vector_size, 1/))
-                        CALL NETCDF_ERR(ERROR, 'ERROR READING '//trim(forc_var_list(ixy)) )                  
+                        CALL NETCDF_ERR(ERROR, 'reading values for '//trim(forc_var_list(ixy)) )                  
                         ! print*, trim(forc_var_list(ixy))
                         ! print*, forcArray
                         ! print*, "rand pattern"
@@ -611,6 +611,13 @@
                         endif
                         ! print*, trim(forc_var_list(ixy)), " after mult"
                         ! print*, forcArray
+
+! ensure downward longwave rad doesn't have negative values
+! note this revision if the different name used for lwrad
+                        if (trim(forc_var_list(ixy)) .eq. "longwave_radiation") then
+                            Where(forcArray < 0) forcArray = 0
+                        endif
+
                         error = nf90_put_var(ncid, varid , forcArray,       &
                             start = (/1,it/), count = (/vector_size, 1/))
                         call netcdf_err(error, 'writing '//trim(forc_var_list(ixy)) )
