@@ -14,11 +14,11 @@ module stochy_data_mod
  use stochy_internal_state_mod
 ! use mersenne_twister_stochy, only : random_seed
  use mersenne_twister, only : random_seed
- use compns_stochy_mod, only : compns_stochy
+ use compns_stochy_mod, only : compns_stochy, compns_stochy_land
 
  implicit none
  private
- public :: init_stochdata,init_stochdata_ocn
+ public :: init_stochdata,init_stochdata_ocn, init_stochdata_land
 
  type(random_pattern), public, save, allocatable, dimension(:) :: &
        rpattern_sppt,rpattern_shum,rpattern_skeb, rpattern_sfc,rpattern_epbl1,rpattern_epbl2,rpattern_ocnsppt

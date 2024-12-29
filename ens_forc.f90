@@ -13,7 +13,7 @@
     use xgrid_mod,           only: grid_box_type
     use netcdf
     use kinddef,             only : kind_dbl_prec,kind_phys
-    use stochy_namelist_def, only : stochini
+    use stochy_namelist_def, only : stochini, max_n_var_lndp
     !use M_DA, only: matsqrt     
     use netcdf
     use mpi
@@ -48,6 +48,9 @@
     ! logical   :: write_this_tile
     integer  :: nargs,ntile_out,nlunit,pe,npes,stackmax=4000000
     integer  :: i1,i2,j1,npts,istart,tpt
+    ! character*80 :: fname
+    ! character*1  :: ntile_out_str
+    integer :: comm
 
 !4.25.23 not sure below are being used
     real(kind=4), allocatable, dimension(:)                   :: grid_xt, grid_yt
@@ -231,9 +234,9 @@
     ! PRINT*," running GenEnsForc  RANK ", MYRANK, " WITH ", NPROCS, "TASKS"
 
     ! define stuff
-    pi=3.14159265359
-    undef=9.99e+20
-    p1000=100000.0
+    ! pi=3.14159265359
+    ! undef=9.99e+20
+    ! p1000=100000.0
 
     ! !define mid-layer pressure
     ! rd=287.0
@@ -836,30 +839,33 @@
         subroutine map_layer_var_names(in_var_name, out_var_name, layer_dim)  !, error)
             implicit none
             character (len=*),   intent(in) :: in_var_name
-            character (len=24),  intent(in) :: out_var_name
+            character (len=24), intent(out) :: out_var_name
             integer,            intent(out) :: layer_dim
             ! integer,          intent(out) :: error
-            integer                         :: iostat
+            integer   :: iostat
+            character :: smcname(4), stcname(6)
 
         select case (trim(in_var_name))
 
-            case('smc1', 'smc2', 'smc3', 'smc4') 
+            case('smc1', 'smc2', 'smc3', 'smc4')
+                smcname = trim(in_var_name)
                 out_var_name = "soil_moisture_vol"
-                read(trim(in_var_name)(4, 4), *, iostat=iostat)  layer_dim                
+                read(smcname(4:4), *, iostat=iostat)  layer_dim                
                 if (iostat /= 0) then 
                     print*, "error getting layer information from "//trim(in_var_name)
                     call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
                 endif
-                if (rank == 0) print*,"doing state perturbation for "//trim(in_var_name)
+                if (myrank == 0) print*,"doing state perturbation for "//trim(in_var_name)
 
             case('soilt1', 'soilt2', 'soilt3', 'soilt4') 
+                stcname = trim(in_var_name)
                 out_var_name = "temperature_soil"
-                read(trim(in_var_name)(6, 6), *, iostat=iostat)  layer_dim                
+                read(stcname(6:6), *, iostat=iostat)  layer_dim                
                 if (iostat /= 0) then 
                     print*, "error getting layer information from "//trim(in_var_name)
                     call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
                 endif
-                if (rank == 0) print*,"doing state perturbation for "//trim(in_var_name)
+                if (myrank == 0) print*,"doing state perturbation for "//trim(in_var_name)
 
             case default
                 print*, 'ERROR: unknown land state variable. Variable must be one of :',   &

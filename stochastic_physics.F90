@@ -233,7 +233,7 @@ subroutine init_stochastic_physics_land(levs, blksz, dtp, input_nml_file_in, sto
    ak, bk, nthreads, mpiroot, mpicomm, iret) 
 !\callgraph
 !use stochy_internal_state_moa
-   use stochy_data_mod, only : init_stochdata,gg_lats,gg_lons,nsppt, &
+   use stochy_data_mod, only : init_stochdata, init_stochdata_land, gg_lats,gg_lons,nsppt, &
                               rad2deg,INTTYP,wlon,rnlat,gis_stochy,vfact_skeb,vfact_sppt,vfact_shum,skeb_vpts,skeb_vwts,sl
    use stochy_namelist_def
    use spectral_transforms,only:colrad_a,latg,lonf,skeblevs
