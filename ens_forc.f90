@@ -731,7 +731,7 @@
                     !read
                     ERROR=NF90_GET_VAR(ncid_st, varid, forcArray, &
                             start = (/1, st_layer_dim, it/), count = (/vector_size, 1, 1/))
-                    CALL NETCDF_ERR(ERROR, 'reading values for '//trim(state_var_list(ixy)) ))                  
+                    CALL NETCDF_ERR(ERROR, 'reading values for '//trim(state_var_list(ixy)) )                 
 
                     if (state_ens_pert_type(ixy) == 1) then 
                         ! pert_factors = 1 + std_dev * corr_rand

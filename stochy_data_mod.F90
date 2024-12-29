@@ -417,14 +417,15 @@ module stochy_data_mod
 !>@brief The subroutine 'init_stochdata_land' determins which stochastic physics
 !!pattern genertors are needed (for land only)
 !>@details it reads the nam_stochy namelist and allocates necessary arrays
- subroutine init_stochdata_land(nlevs, delt, n_var_lndp_tot, stoch_ini_file, nlunit, iret)
+ subroutine init_stochdata_land(nlevs, delt, n_var_lndp_tot, input_nml_file, stoch_ini_file, fn_nml, nlunit, iret)
 !\callgraph
-
 ! initialize random patterns.  
    use netcdf
    implicit none
    character(len=*),  intent(in) :: stoch_ini_file !11.8.21 TZG input init pattern file
    integer, intent(in) :: nlunit,nlevs, n_var_lndp_tot
+   character(len=*),  intent(in) :: input_nml_file(:)
+   character(len=64), intent(in) :: fn_nml
    real, intent(in) :: delt
    integer, intent(out) :: iret
    real :: ones(5)

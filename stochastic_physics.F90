@@ -291,7 +291,7 @@ subroutine init_stochastic_physics_land(levs, blksz, dtp, input_nml_file_in, sto
 
    ! replace
    INTTYP=0 ! bilinear interpolation
-   call init_stochdata_land(levs, dtp, n_var_lndp_in, input_nml_file_in,trim(stoch_ini_file),fn_nml,nlunit,iret)
+   call init_stochdata_land(levs, dtp, n_var_lndp_in, input_nml_file_in, trim(stoch_ini_file),fn_nml,nlunit,iret)
    !print*,'back from init stochdata',iret
    if (iret .ne. 0) return
 

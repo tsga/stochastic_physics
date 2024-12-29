@@ -366,7 +366,7 @@ module compns_stochy_mod
 
 ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 !
-      namelist /nam_stochy/ntrunc,lon_s,lat_s,sppt,sppt_tau,sppt_lscale,sppt_logit, &
+      namelist /nam_stochy/ntrunc,lon_s,lat_s, sppt, sppt_tau, sppt_lscale,sppt_logit, &
       iseed_shum,iseed_sppt,shum,shum_tau,&
       shum_lscale,stochini,skeb_varspect_opt,sppt_sfclimit, &
       skeb,skeb_tau,skeb_vdof,skeb_lscale,iseed_skeb,skeb_vfilt,skeb_diss_smooth, &
@@ -374,8 +374,9 @@ module compns_stochy_mod
       shum_sigefold,spptint,shumint,skebint,skeb_npass,use_zmtnblck,new_lscale, &
       epbl,epbl_lscale,epbl_tau,iseed_epbl,                                    &
       ocnsppt,ocnsppt_lscale,ocnsppt_tau,iseed_ocnsppt
-      namelist /nam_sfcperts/lndp_type,lndp_var_list, lndp_prt_list, iseed_lndp, & 
-      lndp_tau,lndp_lscale 
+      
+      namelist /nam_sfcperts/lndp_type, lndp_var_list, lndp_prt_list, iseed_lndp, & 
+      lndp_tau, lndp_lscale 
 
       rerth  =6.3712e+6      ! radius of earth (m)
       tol=0.01  ! tolerance for calculations
@@ -494,10 +495,7 @@ module compns_stochy_mod
      endif
 
       if (me == 0) then
-            print *, 'stochastic physics'
-            print *, ' do_sppt : ', do_sppt
-            print *, ' do_shum : ', do_shum
-            print *, ' do_skeb : ', do_skeb
+            print *, 'land stochy'
             print *, ' lndp_type : ', lndp_type
             if (lndp_type .NE. 0) print *, ' n_var_lndp : ', n_var_lndp
       endif
