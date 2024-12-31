@@ -87,7 +87,7 @@
     integer             :: n_forc_vars = 6
     integer             :: n_state_vars = 8
     ! LOGICAL             :: rcov_localize, ens_inflate
-    CHARACTER(LEN=500)  :: static_filename, fv3_prefix, vector_prefix
+    CHARACTER(LEN=500)  :: static_filename  !, fv3_prefix, vector_prefix
 
     integer             :: PRINTRANK = 4
     LOGICAL             :: print_debg_info = .false.
@@ -185,7 +185,7 @@
     NAMELIST/NAMENS/ IDIM, JDIM, NUM_TILES, i_layout, j_layout, IY, IM, ID, IH, FH, DELTSFC, &
                     horz_len_scale, ver_len_scale, temp_len_scale, ens_size, &
                     t_len, t_indx, &
-                    static_filename, fv3_prefix, vector_prefix, vector_size, &    !rand_var, &
+                    static_filename, vector_size, &    !fv3_prefix, vector_prefix, rand_var, &
                     PRINTRANK, print_debg_info, & 
                     perturb_forcing, forc_inp_path, forc_inp_file, n_forc_vars, forc_var_list, std_dev_f, forc_ens_pert_type, &
                     perturb_state, state_file_name, n_state_vars, state_var_list, std_dev_s, state_ens_pert_type               
@@ -201,8 +201,8 @@
     DATA t_indx/2/
     
     DATA static_filename/""/
-    DATA fv3_prefix/"./"/
-    DATA vector_prefix/""/
+    ! DATA fv3_prefix/"./"/
+    ! DATA vector_prefix/""/
     ! DATA rand_var/"smc"/
     ! Data vector_size/18360/
     ! DATA print_debg_info/.false./
@@ -843,14 +843,15 @@
             integer,            intent(out) :: layer_dim
             ! integer,          intent(out) :: error
             integer   :: iostat
-            character :: smcname(4), stcname(6)
+            character(len=4) :: smcname
+            character(len=6) :: stcname
 
         select case (trim(in_var_name))
 
             case('smc1', 'smc2', 'smc3', 'smc4')
                 smcname = trim(in_var_name)
                 out_var_name = "soil_moisture_vol"
-                read(smcname(4:4), *, iostat=iostat)  layer_dim                
+                read(smcname(4:4), '(I1)', iostat=iostat)  layer_dim                
                 if (iostat /= 0) then 
                     print*, "error getting layer information from "//trim(in_var_name)
                     call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
@@ -860,7 +861,7 @@
             case('soilt1', 'soilt2', 'soilt3', 'soilt4') 
                 stcname = trim(in_var_name)
                 out_var_name = "temperature_soil"
-                read(stcname(6:6), *, iostat=iostat)  layer_dim                
+                read(stcname(6:6), '(I1)', iostat=iostat)  layer_dim                
                 if (iostat /= 0) then 
                     print*, "error getting layer information from "//trim(in_var_name)
                     call MPI_ABORT(MPI_COMM_WORLD, IERR, error)
