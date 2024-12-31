@@ -1,5 +1,4 @@
  Program GenEnsForc
-    ! PROGRAM FV3Tiles_To_Vector(LENS_OUT, vector_rand_ens)
     
     use stochastic_physics,  only : init_stochastic_physics_land,&
                             run_stochastic_physics_land, finalize_stochastic_physics
@@ -23,7 +22,6 @@
     integer, parameter :: dp = kind(1.0d+0)
 
     integer, parameter      :: nlevs=3
-    ! integer, parameter :: max_n_var_lndp = 6
     integer                 :: ntasks,fid
     integer                 :: nthreads
     integer            :: ncid, xt_dim_id,yt_dim_id,time_dim_id,xt_var_id,&
@@ -32,9 +30,6 @@
     integer                 :: varidl(max_n_var_lndp)
     integer                 :: zt_dim_id,zt_var_id
     character*2             :: strid
-
-    ! character(len=3), dimension(max_n_var_lndp)         ::  lndp_var_list
-    ! real(kind=kind_dbl_prec), dimension(max_n_var_lndp) ::  lndp_prt_list
     
     real :: ak(nlevs+1),bk(nlevs+1)
     real(kind=4) :: ts,undef
@@ -48,8 +43,7 @@
     ! logical   :: write_this_tile
     integer  :: nargs,ntile_out,nlunit,pe,npes,stackmax=4000000
     integer  :: i1,i2,j1,npts,istart,tpt
-    ! character*80 :: fname
-    ! character*1  :: ntile_out_str
+    
     integer :: comm
 
 !4.25.23 not sure below are being used
@@ -72,22 +66,22 @@
     ! integer  ::  skeb_npass
 
     logical  :: use_zmtnblck    
-    integer  ::  n_var_lndp, lndp_type
+    integer  :: n_var_lndp, lndp_type
     character(len=65)              :: fn_nml                   !< namelist filename
     character(len=256),allocatable :: input_nml_file(:) !< character string containing full namelist
     
     Real, allocatable     :: vector_rand_ens(:)
-    INTEGER :: IDIM, JDIM, NUM_TILES, IY, IM, ID, IH, &
-               i_layout, j_layout, tot_subtiles, my_tile
-    REAL    :: FH, DELTSFC
-    ! INTEGER :: IERR
-    INTEGER             :: NPROCS, MYRANK, NUM_THREADS, NUM_PARTHDS, MAX_TASKS
-    REAL                :: horz_len_scale, ver_len_scale, temp_len_scale 
-    Integer             :: ens_size, t_indx, t_len       !, n_surf_vars
+    INTEGER :: IDIM=96, JDIM=96, NUM_TILES=6, IY=2008, IM=10, ID=1, IH=0, &
+               i_layout=1, j_layout=1
+    integer :: tot_subtiles, my_tile
+    REAL    :: FH=0., DELTSFC=0.0
+ 
+    INTEGER             :: NPROCS, MYRANK, NUM_THREADS, NUM_PARTHDS, MAX_TASKS=99999
+    REAL                :: horz_len_scale=120., ver_len_scale=800., temp_len_scale=24. 
+    Integer             :: ens_size=20, t_indx=2, t_len=24       !, n_surf_vars
     integer             :: n_forc_vars = 6
     integer             :: n_state_vars = 8
-    ! LOGICAL             :: rcov_localize, ens_inflate
-    CHARACTER(LEN=500)  :: static_filename  !, fv3_prefix, vector_prefix
+    CHARACTER(LEN=500)  :: static_filename = ""
 
     integer             :: PRINTRANK = 4
     LOGICAL             :: print_debg_info = .false.
@@ -127,7 +121,7 @@
 
     character(len=500)      :: stoch_ini_file   ! input init pattern file
 
-    logical                 :: perturb_forcing = .true., perturb_state = .false.    ! if true, state pert samples start at n_forc + 1 
+    logical                 :: perturb_forcing = .true., perturb_state = .false.     
     character(len=128)      :: state_file_name = "ufs_land_restart.2020-01-01_00-00-00.nc"
     CHARACTER(len=500)      :: state_file_ens
     Integer                 :: ncid_st
@@ -151,9 +145,9 @@
         ! "soil_moisture_vol", "temperature_soil"/) 
 
 ! Forcing
-! lrad and temp additive errors, rest multiplicative
+!> lrad and temp additive errors, rest multiplicative
 ! Threshold 
-! !> Ensure downward longwave radition doesn’t have a negative (upward) values—due to its additive perturbation 
+!> Ensure downward longwave radition doesn’t have a negative (upward) values—due to its additive perturbation 
 
 ! ! States: Considered the following 
 !     snow_level_ice(time, snow_levels, location)         mm
@@ -180,43 +174,15 @@
 !                     Ask Clara about this
 !             5.3 specify correlation (high) and generate (correlated) individual samples
 !             5.4 independent random errors
-!  ! upper limits for smv   
+!  ! upper limit for smc = 1   
 
     NAMELIST/NAMENS/ IDIM, JDIM, NUM_TILES, i_layout, j_layout, IY, IM, ID, IH, FH, DELTSFC, &
                     horz_len_scale, ver_len_scale, temp_len_scale, ens_size, &
                     t_len, t_indx, &
-                    static_filename, vector_size, &    !fv3_prefix, vector_prefix, rand_var, &
+                    static_filename, vector_size, &  
                     PRINTRANK, print_debg_info, & 
                     perturb_forcing, forc_inp_path, forc_inp_file, n_forc_vars, forc_var_list, std_dev_f, forc_ens_pert_type, &
                     perturb_state, state_file_name, n_state_vars, state_var_list, std_dev_s, state_ens_pert_type               
-    !
-    DATA IDIM,JDIM,NUM_TILES, i_layout, j_layout/96,96,6, 1, 1/ 
-    DATA IY,IM,ID,IH,FH/1997,8,2,0,0./
-    DATA DELTSFC/0.0/, MAX_TASKS/99999/
-    DATA horz_len_scale/55.0/
-    DATA ver_len_scale/800./
-    DATA temp_len_scale/24./
-    DATA ens_size/20/
-    Data t_len/24/
-    DATA t_indx/2/
-    
-    DATA static_filename/""/
-    ! DATA fv3_prefix/"./"/
-    ! DATA vector_prefix/""/
-    ! DATA rand_var/"smc"/
-    ! Data vector_size/18360/
-    ! DATA print_debg_info/.false./
-    ! DATA PRINTRANK/4/
-    ! Data n_forc_vars/6/
-    ! Data forc_inp_path/"./"/
-    ! Data forc_inp_file/"C96_GDAS_forcing_2019-12-15.nc"/   
-
-    ! Data std_dev_f/0.1, 0.05, 20.0, 2.0, 0.05, 0.05/  
-    ! Data perturb_state/.false./
-    ! Data state_file_name/"ufs_land_restart.2020-01-01_00-00-00.nc"/
-    ! Data n_state_vars/10/
-    ! DATA num_assim_steps/1/  ! For multiple time steps of assimilation
-    ! DATA dT_Asssim/24.0/     ! hrs. For multiple time steps of assimilation
     
     ! print*, "starting stanalone stochy"
     call fms_init()
