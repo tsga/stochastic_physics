@@ -4,47 +4,40 @@ compile_all=1
 #DEBUG=YES
 DEBUG=NO
 
-#source ./module-setup.sh
-#module purge
-#module use $( pwd -P )
-#module load modules.hera.intel
-
-#local apps dir
-export apps_dir=/scratch1/NCEPDEV/da/Tseganeh.Gichamo/APPS/lapack/build/
-#
-export gdasapp_mods=/scratch1/NCEPDEV/da/Tseganeh.Gichamo/GDASApp/modulefiles
-export ufs_mods=/scratch1/NCEPDEV/da/Tseganeh.Gichamo/global-workflow/sorc/ufs_model.fd/modulefiles
 module purge
-#module use $gdasapp_mods
-#module load GDAS/hera
-module use $ufs_mods
-module load ufs_hera.intel
-#module load netcdf/4.7.0
-module load netcdf-hdf5parallel/4.7.4
-module list
 
-export FMS_ROOT=/scratch1/NCEPDEV/nems/role.epic/spack-stack/spack-stack-1.5.1/envs/unified-env-rocky8/install/intel/2021.5.0/fms-2023.02.01-rkneyyh/
-export ESMF_ROOT=/scratch1/NCEPDEV/nems/role.epic/spack-stack/spack-stack-1.5.1/envs/unified-env-rocky8/install/intel/2021.5.0/esmf-8.5.0-g653pwe/
-export HDF5_ROOT=/scratch1/NCEPDEV/nems/role.epic/spack-stack/spack-stack-1.5.1/envs/unified-env-rocky8/install/intel/2021.5.0/hdf5-1.14.0-3pi45dw/
-export ZLIB_ROOT=/scratch1/NCEPDEV/nems/role.epic/spack-stack/spack-stack-1.5.1/envs/unified-env-rocky8/install/intel/2021.5.0/zlib-1.2.13-3ysbbfc/
+module use /scratch1/NCEPDEV/nems/role.epic/spack-stack/spack-stack-1.6.0/envs/unified-env-rocky8/install/modulefiles/Core
+
+module load stack-intel/2021.5.0
+module load stack-intel-oneapi-mpi/2021.5.1
+module load netcdf/4.7.0
+module load netcdf-hdf5parallel/4.7.4
+module load nco/5.1.6
+module load fms/2023.04
+module load esmf/8.6.0
+
+module list
 
 rm GenEnsForc.x *.o *.a
 
-FC=/apps/oneapi/mpi/2021.5.1/bin/mpiifort #mpif90
-FMS_INC=${FMS_ROOT}/include_r8
-FMS_LIB=${FMS_ROOT}/lib
-ESMF_LIB=${ESMF_ROOT}/lib
-ESMF_INC=${ESMF_ROOT}/include
-HDF5_LIBRARIES=${HDF5_ROOT}/lib
-HDF_INC=${HDF5_ROOT}/include
-ZLIB_LIBRARIES=${ZLIB_ROOT}/lib
-ZLIB_INC={ZLIB_ROOT}/include
+FC=ifort
+MPIF90=mpiifort
+FMS_INC=${fms_ROOT}/include_r8
+FMS_LIB=${fms_ROOT}/lib
+ESMF_INC=${esmf_ROOT}/include
+ESMF_LIB=${esmf_ROOT}/lib
+NETCDF_INC=${NETCDF}/include
+NETCDF_LIB=${NETCDF}/lib
+HDF5_INC=${hdf5_ROOT}/include
+HDF5_LIB=${hdf5_ROOT}/lib
+ZLIB_INC=${zlib_ROOT}/include
+ZLIB_LIB=${zlib_ROOT}/lib
 
-echo ${FMS_ROOT}
-echo ${NETCDF}
-echo ${HDF5_LIBRARIES}
+LPACK_LIB=/scratch1/NCEPDEV/da/Tseganeh.Gichamo/APPS/lapack/build/lib
 
-INCS="-I. -I${FMS_INC} -I${NETCDF}/include"
+rm EnsGen.x *.o *.a
+
+INCS="-I. -I${FMS_INC} -I${ESMF_INC} -I${NETCDF_INC}/include"
 if [ $DEBUG == 'YES' ]; then
    FLAGS=" -O0 -g -check all -link_mpi=dbg_mt -traceback -real-size 64 -qopenmp -c "$INCS
 else
@@ -53,26 +46,28 @@ fi
 
 if [ $compile_all -eq 1 ];then
    rm -f *.i90 *.i *.o *.mod lib*a
-   $FC ${FLAGS} kinddef.F90
-   $FC ${FLAGS} mpi_wrapper.F90
-   $FC ${FLAGS} unit_tests/fv_arrays_stub.F90
-   $FC ${FLAGS} unit_tests/fv_mp_stub_mod.F90
-   $FC ${FLAGS} unit_tests/fv_control_stub.F90
-   $FC ${FLAGS} unit_tests/atmosphere_stub.F90
-   $FC ${FLAGS} mersenne_twister.F90
-   $FC ${FLAGS} stochy_internal_state_mod.F90
-   $FC ${FLAGS} stochy_namelist_def.F90
-   $FC ${FLAGS} spectral_transforms.F90
-   $FC ${FLAGS} compns_stochy.F90
-   $FC ${FLAGS} stochy_patterngenerator.F90
-   $FC ${FLAGS} stochy_data_mod.F90
-   $FC ${FLAGS} get_stochy_pattern.F90
-   $FC ${FLAGS} lndp_apply_perts.F90
-   $FC ${FLAGS} stochastic_physics.F90
+   ${MPIF90} ${FLAGS} kinddef.F90
+   ${MPIF90} ${FLAGS} mpi_wrapper.F90
+   ${MPIF90} ${FLAGS} unit_tests/fv_arrays_stub.F90
+   ${MPIF90} ${FLAGS} unit_tests/fv_mp_stub_mod.F90
+   ${MPIF90} ${FLAGS} unit_tests/fv_control_stub.F90
+   ${MPIF90} ${FLAGS} unit_tests/atmosphere_stub.F90
+   ${MPIF90} ${FLAGS} mersenne_twister.F90
+   ${MPIF90} ${FLAGS} stochy_internal_state_mod.F90
+   ${MPIF90} ${FLAGS} stochy_namelist_def.F90
+   ${MPIF90} ${FLAGS} spectral_transforms.F90
+   ${MPIF90} ${FLAGS} compns_stochy.F90
+   ${MPIF90} ${FLAGS} stochy_patterngenerator.F90
+   ${MPIF90} ${FLAGS} stochy_data_mod.F90
+   ${MPIF90} ${FLAGS} get_stochy_pattern.F90
+   ${MPIF90} ${FLAGS} lndp_apply_perts.F90
+   ${MPIF90} ${FLAGS} stochastic_physics.F90
 fi
-   ar rv libstochastic_physics.a *.o
+   
+ar rv libstochastic_physics.a *.o
+
 if [ $DEBUG == 'YES' ]; then
-   $FC -traceback -g -C -real-size 64 -qopenmp -o GenEnsForc.x ens_forc.f90 ${INCS} -I${NETCDF}/include -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF}/lib -lnetcdf -lnetcdff -L${ZLIB_LIBRARIES} -lz  -L$apps_dir/lib -llapack -lblas # \ -L${HDF5_LIBRARIES} -lhdf5_hl -lhdf5
+   ${MPIF90} -traceback -g -C -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5
 else
-   $FC -traceback -real-size 64 -qopenmp -o GenEnsForc.x ens_forc.f90 ${INCS} -I${NETCDF}/include -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF}/lib -lnetcdf -lnetcdff -L${ZLIB_LIBRARIES} -lz  -L$apps_dir/lib -llapack -lblas  # \ -L${HDF5_LIBRARIES} -lhdf5_hl -lhdf5
+   ${MPIF90} -traceback -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5 
 fi
