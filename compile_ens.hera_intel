@@ -15,6 +15,8 @@ module load netcdf-hdf5parallel/4.7.4
 module load nco/5.1.6
 module load fms/2023.04
 module load esmf/8.6.0
+module load eigen/3.4.0
+module load openblas/0.3.24
 
 module list
 
@@ -30,8 +32,8 @@ HDF5_INC=${hdf5_ROOT}/include
 HDF5_LIB=${hdf5_ROOT}/lib
 ZLIB_INC=${zlib_ROOT}/include
 ZLIB_LIB=${zlib_ROOT}/lib
-
-LPACK_LIB=/scratch1/NCEPDEV/da/Tseganeh.Gichamo/APPS/lapack/build/lib
+LPACK_INC=${openblas_ROOT}/include 
+LPACK_LIB=${openblas_ROOT}/lib
 
 rm EnsGen.x *.o *.a
 
@@ -65,7 +67,7 @@ fi
 ar rv libstochastic_physics.a *.o
 
 if [ $DEBUG == 'YES' ]; then
-   ${MPIF90} -traceback -g -C -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5
+   ${MPIF90} -traceback -g -C -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -lopenblas    # -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5
 else
-   ${MPIF90} -traceback -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5 
+   ${MPIF90} -traceback -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -lopenblas    # -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5 
 fi
