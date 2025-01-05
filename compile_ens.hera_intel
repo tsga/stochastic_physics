@@ -18,8 +18,6 @@ module load esmf/8.6.0
 
 module list
 
-rm GenEnsForc.x *.o *.a
-
 FC=ifort
 MPIF90=mpiifort
 FMS_INC=${fms_ROOT}/include_r8
