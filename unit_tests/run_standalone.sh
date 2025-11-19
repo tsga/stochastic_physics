@@ -1,6 +1,6 @@
 #!/bin/sh
-#SBATCH -e err
-#SBATCH -o out
+#SBATCH -e errlog
+#SBATCH -o errlog
 #SBATCH --account=gsienkf
 #SBATCH --qos=debug
 #SBATCH --nodes=1
@@ -39,6 +39,6 @@ sed -i -e "s/NPY/$NPY/g" input.nml
 sed -i -e "s/RES/$RES/g" input.nml
 sed -i -e "s/_STOCHINI_/.false./g" input.nml
 export OMP_NUM_THREADS=1
-time srun --label -n 6 standalone_stochy.x 
+time srun --label -n 12 standalone_stochy.x 
 mkdir stochy_out
 mv workg* stochy_out

@@ -223,7 +223,7 @@ contains
 
 
          call mpp_domains_init(MPP_DOMAIN_TIME)
-
+         !print*, "nregions", nregions
          select case(nregions)
          case ( 1 )  ! Lat-Lon "cyclic"
 
@@ -239,7 +239,8 @@ contains
                npes_per_tile = npes_x*npes_y !/nregions !Set up for concurrency
                is_symmetry = .true.
                call mpp_define_layout( (/1,npx-1,1,npy-1/), npes_per_tile, layout )
-
+               !print*, "npes_per_tile", npes_per_tile
+               !print*, "layout", layout
                if ( npes_x == 0 ) then 
                   npes_x = layout(1)
                endif
@@ -249,13 +250,16 @@ contains
 
                if ( npes_x==npes_y .and. (npx-1)==((npx-1)/npes_x)*npes_x )  square_domain = .true.
 
-               if ( (npx/npes_x < ng) .or. (npy/npes_y < ng) ) then
+               !5.20.24 if ( (npx/npes_x < ng) .or. (npy/npes_y < ng) ) then
+               if ( (npx/npes_x < 1) .or. (npy/npes_y < 1) ) then
                   write(*,310) npes_x, npes_y, npx/npes_x, npy/npes_y
                  call mp_stop
                  call exit(1)
               endif
            
               layout = (/npes_x,npes_y/)
+              !print*, "npes_per_tile", npes_per_tile
+              !print*, "layout", layout
             case (3)   ! Lat-Lon "cyclic"
                type="Lat-Lon: cyclic"
                nregions = 4
@@ -329,6 +333,9 @@ contains
          case default
             call mpp_error(FATAL, 'domain_decomp: no such test: '//type)
          end select
+         !print*, "nregions", nregions
+         !print*, "pelist", pelist
+         !print*, "grid_type", grid_type
 
          allocate(layout2D(2,nregions), global_indices(4,nregions), npes_tile(nregions) )
          allocate(pe_start(nregions),pe_end(nregions))
@@ -458,6 +465,9 @@ contains
             istart1(12) = nx; iend1(12) = nx; jstart1(12) = 1;  jend1(12) = ny
             istart2(12) = 1;  iend2(12) = 1;  jstart2(12) = 1;  jend2(12) = ny
          end select
+         !print*, "pe_start=", pe_start, "pe_end=", pe_end, "symmetry=", is_symmetry
+         !print*, "shalo =", ng, "nhalo =", ng, "whalo =", ng, "ehalo =", ng
+         !print*, "tile_id=", tile_id, "name =", type
 
          if ( ANY(pelist == gid) ) then
             allocate(tile_id(nregions))
@@ -812,7 +822,7 @@ subroutine broadcast_domains(Atm,current_pelist,current_npes)
   ens_root_pe = (ensemble_id-1)*npes
 
   !Pelist needs to be set to ALL ensemble PEs for broadcast_domain to work
-  call mpp_set_current_pelist((/ (i,i=ens_root_pe,npes-1+ens_root_pe) /))
+  ! ----- 11.17.21 call mpp_set_current_pelist((/ (i,i=ens_root_pe,npes-1+ens_root_pe) /))
   do n=1,size(Atm)
      call mpp_broadcast_domain(Atm(n)%domain)
      call mpp_broadcast_domain(Atm(n)%domain_for_coupler)

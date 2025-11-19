@@ -19,7 +19,7 @@ contains
 !>@details It reads the stochastic physics namelist (nam_stoch and nam_sfcperts)
 !allocates and polulates the necessary arrays
 
-subroutine init_stochastic_physics(levs, blksz, dtp, sppt_amp, input_nml_file_in, fn_nml, nlunit, &
+subroutine init_stochastic_physics(levs, blksz, dtp, sppt_amp, input_nml_file_in, stoch_ini_file, fn_nml, nlunit, &
     xlon,xlat, &
     do_sppt_in, do_shum_in, do_skeb_in, lndp_type_in, n_var_lndp_in, use_zmtnblck_out, skeb_npass_out,    &
     lndp_var_list_out, lndp_prt_list_out, ak, bk, nthreads, mpiroot, mpicomm, iret) 
@@ -35,7 +35,7 @@ implicit none
 integer, intent(out)                    :: iret
 
 ! Interface variables
-
+character(len=*),         intent(in)    :: stoch_ini_file !11.8.21 TZG input init pattern file
 integer,                  intent(in)    :: levs, nlunit, nthreads, mpiroot, mpicomm
 integer,                  intent(in)    :: blksz(:)
 real(kind=kind_dbl_prec), intent(in)    :: dtp
@@ -85,7 +85,7 @@ enddo
 
 ! replace
 INTTYP=0 ! bilinear interpolation
-call init_stochdata(levs,dtp,input_nml_file_in,fn_nml,nlunit,iret)
+call init_stochdata(levs,dtp,input_nml_file_in,trim(stoch_ini_file),fn_nml,nlunit,iret)
 print*,'back from init stochdata',iret
 if (iret .ne. 0) return
 ! check namelist entries for consistency
@@ -451,6 +451,7 @@ use stochy_data_mod, only : nshum,rpattern_shum,rpattern_sppt,nsppt,rpattern_ske
                             vfact_sppt,vfact_shum,vfact_skeb, skeb_vwts,skeb_vpts, &
                             rpattern_sfc, nlndp,gg_lats,gg_lons,sl,skebu_save,skebv_save,gis_stochy
 use spectral_transforms, only : lat1s_a ,lon_dims_a,wgt_a,sinlat_a,coslat_a,colrad_a,rcs2_a
+
 implicit none
 
    if (allocated(gg_lats)) deallocate (gg_lats)
@@ -500,6 +501,13 @@ deallocate(gis_stochy%plnev_a)
 deallocate(gis_stochy%plnod_a)
 deallocate(gis_stochy%plnew_a)
 deallocate(gis_stochy%plnow_a)
+
+if (allocated(gis_stochy%len)) deallocate(gis_stochy%len)
+if (allocated(gis_stochy%parent_lons)) deallocate(gis_stochy%parent_lons)
+if (allocated(gis_stochy%parent_lats)) deallocate(gis_stochy%parent_lats)
+
+if (allocated(gis_stochy%trie_ls)) deallocate ( gis_stochy%trie_ls)
+if (allocated(gis_stochy%trio_ls)) deallocate ( gis_stochy%trio_ls)
 
 end subroutine finalize_stochastic_physics
 

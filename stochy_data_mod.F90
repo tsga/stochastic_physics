@@ -43,12 +43,13 @@ module stochy_data_mod
 !>@brief The subroutine 'init_stochdata' determins which stochastic physics
 !!pattern genertors are needed.
 !>@details it reads the nam_stochy namelist and allocates necessary arrays
- subroutine init_stochdata(nlevs,delt,input_nml_file,fn_nml,nlunit,iret)
+ subroutine init_stochdata(nlevs,delt,input_nml_file,stoch_ini_file,fn_nml,nlunit,iret)
 !\callgraph
 
 ! initialize random patterns.  
    use netcdf
    implicit none
+   character(len=*),  intent(in) :: stoch_ini_file !11.8.21 TZG input init pattern file
    integer, intent(in) :: nlunit,nlevs
    character(len=*),  intent(in) :: input_nml_file(:)
    character(len=64), intent(in) :: fn_nml
@@ -127,7 +128,7 @@ module stochy_data_mod
       if (stochini) then
          print*,'opening stoch_ini'
          !OPEN(stochlun,file='INPUT/atm_stoch.res.bin',form='unformatted',iostat=ierr,status='old')
-         ierr=nf90_open('INPUT/atm_stoch.res.nc',nf90_nowrite,ncid=stochlun)
+         ierr=nf90_open(trim(stoch_ini_file),nf90_nowrite,ncid=stochlun)
          if (ierr .NE. 0) then
             write(0,*) 'error opening stoch_ini'
             iret = ierr
