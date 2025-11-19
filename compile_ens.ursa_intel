@@ -17,6 +17,8 @@ module load curl/8.10.1
 module load hdf5/1.14.3
 module load netcdf-c/4.9.2 
 module load netcdf-fortran/4.6.1
+module load parallel-netcdf/1.12.3
+module load parallelio/2.6.2
 module load nco/5.2.4
 
 module load fms/2024.02
@@ -32,18 +34,24 @@ FMS_INC=${fms_ROOT}/include_r8
 FMS_LIB=${fms_ROOT}/lib
 ESMF_INC=${esmf_ROOT}/include
 ESMF_LIB=${esmf_ROOT}/lib
-NETCDF_INC=${NETCDF}/include
-NETCDF_LIB=${NETCDF}/lib
+NETCDF_INC=${netcdf_c_ROOT}/include  #NETCDF}/include
+NETCDF_LIB=${netcdf_c_ROOT}/lib
+NETCDF_F_INC=${netcdf_fortran_ROOT}/include  #NETCDF}/include
+NETCDF_F_LIB=${netcdf_fortran_ROOT}/lib
 HDF5_INC=${hdf5_ROOT}/include
 HDF5_LIB=${hdf5_ROOT}/lib
 ZLIB_INC=${zlib_ROOT}/include
 ZLIB_LIB=${zlib_ROOT}/lib
-LPACK_INC=${openblas_ROOT}/include 
-LPACK_LIB=${openblas_ROOT}/lib
+LPACK_INC=${OPENBLAS_ROOT}/include   #openblas_ROOT}/include 
+LPACK_LIB=${OPENBLAS_ROOT}/lib
+PNETCDF_LIB=/contrib/spack-stack/spack-stack-1.9.2/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/parallel-netcdf-1.12.3-oeqtpxg/lib
+PNETCDF_INC=/contrib/spack-stack/spack-stack-1.9.2/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/parallel-netcdf-1.12.3-oeqtpxg/include
+PIO_LIB=/contrib/spack-stack/spack-stack-1.9.2/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/parallelio-2.6.2-pmg6l7r/lib
+PIO_INC=/contrib/spack-stack/spack-stack-1.9.2/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/parallelio-2.6.2-pmg6l7r/include
 
 rm EnsGen.x *.o *.a
 
-INCS="-I. -I${FMS_INC} -I${ESMF_INC} -I${NETCDF_INC}/include"
+INCS="-I. -I${FMS_INC} -I${ESMF_INC} -I${NETCDF_INC} -I${NETCDF_F_INC} -I${PNETCDF_INC} -I${PIO_INC}"
 if [ $DEBUG == 'YES' ]; then
    FLAGS=" -O0 -g -check all -link_mpi=dbg_mt -traceback -real-size 64 -qopenmp -c "$INCS
 else
@@ -73,7 +81,7 @@ fi
 ar rv libstochastic_physics.a *.o
 
 if [ $DEBUG == 'YES' ]; then
-   ${MPIF90} -traceback -g -C -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -lopenblas    # -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5
+   ${MPIF90} -traceback -g -C -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -L${PNETCDF_LIB} -L${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -L${NETCDF_F_LIB} -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -lopenblas -L${PIO_LIB} -lpioc -lpiof  # -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5
 else
-   ${MPIF90} -traceback -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -lopenblas    # -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5 
+   ${MPIF90} -traceback -real-size 64 -qopenmp -o EnsGen.x ens_forc.f90 ${INCS} -L. -lstochastic_physics -L${FMS_LIB} -lfms_r8 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -L${PNETCDF_LIB} -L${ESMF_LIB} -lesmf -L${NETCDF_LIB} -lnetcdf -L${NETCDF_F_LIB} -lnetcdff -L${ZLIB_LIB} -lz -L${LPACK_LIB} -lopenblas -L${PIO_LIB} -lpioc -lpiof     # -llapack -lblas    # -L${HDF5_LIB} -lhdf5_hl -lhdf5 
 fi
