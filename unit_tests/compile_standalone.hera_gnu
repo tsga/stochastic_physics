@@ -1,0 +1,76 @@
+#!/bin/sh
+compile_all=1
+DEBUG=YES
+#DEBUG=NO
+source ./module-setup.sh
+module purge
+module use $( pwd -P )
+if [ $DEBUG == 'NO' ]; then
+module use /scratch2/NCEPDEV/stmp1/role.epic/installs/gnu/modulefiles
+module use /scratch2/NCEPDEV/stmp1/role.epic/installs/openmpi/modulefiles
+module use /scratch2/NCEPDEV/stmp1/role.epic/spack-stack/spack-stack-1.6.0_gnu13/envs/fms-2024.01/install/modulefiles/Core
+module load stack-gcc/13.3.0
+module load stack-openmpi/4.1.6
+module load cmake/3.23.1
+module load nccmp/1.9.0.1
+module load jasper/2.0.32
+  module load zlib/1.2.13
+ module load libpng/1.6.37
+  module load hdf5/1.14.0
+  module load netcdf-c/4.9.2
+  module load netcdf-fortran/4.6.1
+  module load parallelio/2.5.10
+  module load esmf/8.6.0
+  module load fms/2024.01
+  module load bacio/2.4.1
+  module load crtm/2.4.0
+  module load g2/3.5.1
+  module load g2tmpl/1.13.0
+ module load ip/4.3.0
+  module load sp/2.5.0
+  module load w3emc/2.10.0
+  module load gftl-shared/1.6.1
+  module load mapl/2.40.3-esmf-8.6.0
+  module load scotch/7.0.4
+else
+   module load modules.stoch_gnu
+fi
+
+rm standalone_stochy.x
+FC=mpif90
+FMS_INC=${FMS_ROOT}/include_r4
+FMS_LIB=${FMS_ROOT}/lib
+INCS="-I. -I${FMS_INC} -I${NETCDF}/include"
+if [ $DEBUG == 'YES' ]; then
+   FLAGS="-DDEBUG -ggdb -fbacktrace -cpp -fcray-pointer -ffree-line-length-none -fno-range-check -fdefault-real-8 -fdefault-double-8 -g -O0 -fno-unsafe-math-optimizations -frounding-math -fsignaling-nans -ffpe-trap=invalid,zero,overflow -fbounds-check -I. -fopenmp -c "$INCS
+else
+   FLAGS="-ggdb -fbacktrace -cpp -fcray-pointer -ffree-line-length-none -fno-range-check -O2 -fdefault-real-8 -O2 -fPIC -fopenmp -c "$INCS
+fi
+cd ..
+if [ $compile_all -eq 1 ];then
+   rm -f *.i90 *.i *.o *.mod lib*a
+   $FC ${FLAGS} kinddef.F90
+   $FC ${FLAGS} mpi_wrapper.F90
+   $FC ${FLAGS} unit_tests/fv_arrays_stub.F90
+   $FC ${FLAGS} unit_tests/fv_mp_stub_mod.F90
+   $FC ${FLAGS} unit_tests/fv_control_stub.F90
+   $FC ${FLAGS} unit_tests/atmosphere_stub.F90
+   $FC ${FLAGS} mersenne_twister.F90
+   $FC ${FLAGS} stochy_internal_state_mod.F90
+   $FC ${FLAGS} stochy_namelist_def.F90
+   $FC ${FLAGS} spectral_transforms.F90
+   $FC ${FLAGS} compns_stochy.F90
+   $FC ${FLAGS} stochy_patterngenerator.F90
+   $FC ${FLAGS} stochy_data_mod.F90
+   $FC ${FLAGS} get_stochy_pattern.F90
+   $FC ${FLAGS} lndp_apply_perts.F90
+   $FC ${FLAGS} stochastic_physics.F90
+fi
+   ar rv libstochastic_physics.a *.o
+if [ $DEBUG == 'YES' ]; then
+   $FC -fdec -ggdb -fbacktrace -cpp -fcray-pointer -ffree-line-length-none -fno-range-check -fdefault-real-8 -fdefault-double-8 -g -O0 -fno-unsafe-math-optimizations -frounding-math -fsignaling-nans -ffpe-trap=invalid,zero,overflow -fbounds-check -I. -fopenmp -o unit_tests/standalone_stochy.x unit_tests/standalone_stochy.F90 ${INCS} -I${NETCDF}/include -L. -lstochastic_physics -L${FMS_LIB} -lfms_r4 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF}/lib -lnetcdff -lnetcdf -L${HDF5_LIBRARIES} -lhdf5_hl -lhdf5 \
+-L${ZLIB_LIBRARIES} -lz -ldl
+else
+   $FC -fdec -fbacktrace -cpp -fcray-pointer -ffree-line-length-none -fno-range-check -fdefault-real-8 -fdefault-double-8 -g -O2 -I. -fopenmp -o unit_tests/standalone_stochy.x unit_tests/standalone_stochy.F90 ${INCS} -I${NETCDF}/include -L. -lstochastic_physics -L${FMS_LIB} -lfms_r4 -L${ESMF_LIB} -Wl,-rpath,${ESMF_LIB} -lesmf -L${NETCDF}/lib -lnetcdff -lnetcdf -L${HDF5_LIBRARIES} -lhdf5_hl -lhdf5 \
+-L${ZLIB_LIBRARIES} -lz -ldl
+fi

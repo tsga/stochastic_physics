@@ -63,7 +63,7 @@ integer :: blocksz,levs
 integer :: ncells,nlives
 integer, save :: initialize_ca
 integer(8) :: count, count_rate, count_max, count_trunc,nx_full
-integer(8) :: iscale = 10000000000
+integer(8) :: iscale = 10000000000_8
 integer, allocatable :: iini(:,:,:),ilives_in(:,:,:),ca_plumes(:,:),io_layout(:)
 real(kind=kind_phys), allocatable :: ssti(:,:),lsmski(:,:),lakei(:,:)
 real(kind=kind_phys), allocatable :: CA(:,:),condition(:,:),conditiongrid(:,:)

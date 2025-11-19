@@ -48,7 +48,7 @@ integer,save :: isdnx,iednx,jsdnx,jednx
 integer,save :: iscnx,iecnx,jscnx,jecnx
 integer :: nxncells, nyncells
 integer(8) :: count, count_rate, count_max, count_trunc,nx_full
-integer(8) :: iscale = 10000000000
+integer(8) :: iscale = 10000000000_8
 integer, allocatable :: iini_g(:,:,:),ilives_g(:,:)
 real(kind=kind_dbl_prec), allocatable :: field_out(:,:,:), field_smooth(:,:)
 real(kind=kind_dbl_prec), allocatable :: CA(:,:),CA1(:,:),CA2(:,:),CA3(:,:),CAprime(:,:)
