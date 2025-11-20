@@ -21,7 +21,7 @@ module stochy_data_mod
 
  implicit none
  private
- public :: init_stochdata,init_stochdata_ocn
+ public :: init_stochdata,init_stochdata_ocn, init_stochdata_land
 
  type(random_pattern), public, save, allocatable, dimension(:) :: &
        rpattern_sppt,rpattern_shum,rpattern_skeb, rpattern_sfc,rpattern_epbl1,rpattern_epbl2,&

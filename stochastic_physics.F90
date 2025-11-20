@@ -289,6 +289,9 @@ subroutine init_stochastic_physics_land(levs, blksz, dtp, input_nml_file_in, sto
    ! Interface variables
    character(len=*),         intent(in)    :: stoch_ini_file !11.8.21 TZG input init pattern file
    integer,                  intent(in)    :: levs, nlunit, nthreads, mpiroot, mpicomm
+   
+   type(MPI_Comm)                          :: mpicomm_t !TODO TBCL after updates to use mpi_f90 types
+
    integer,                  intent(in)    :: blksz(:)
    real(kind=kind_dbl_prec), intent(in)    :: dtp
    ! real(kind=kind_dbl_prec), intent(out)   :: sppt_amp
@@ -313,7 +316,8 @@ subroutine init_stochastic_physics_land(levs, blksz, dtp, input_nml_file_in, sto
    character*2::proc
 
    ! Initialize MPI and OpenMP
-   call mpi_wrapper_initialize(mpiroot,mpicomm)
+   mpicomm_t%mpi_val = mpicomm
+   call mpi_wrapper_initialize(mpiroot,mpicomm_t)  !mpicomm)
    gis_stochy%nodes = npes
    gis_stochy%mype = mype
    gis_stochy%nx = maxval(blksz)

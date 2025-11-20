@@ -15,6 +15,7 @@
     use stochy_namelist_def, only : stochini, max_n_var_lndp
     !use M_DA, only: matsqrt     
     use netcdf
+    !use mpi_f08 
     use mpi
 
     implicit none
@@ -109,6 +110,7 @@
     Integer                :: ixy, sxy, ipr, arr_indx, iproc, ie, iv, it
     INTEGER                :: mpiReal_size, rsize, isize, mpiInt_size
     integer, allocatable   :: tile_members(:,:), tile_group(:), comm_tile(:)
+    !type(MPI_Comm),allocatable :: comm_tile(:)
     integer                :: group_world  !, comm_tile !comm_world, 
     integer                :: Np_ext, Np_til, p_gN, p_gRank
     integer, allocatable   :: pg_bindx(:,:)
