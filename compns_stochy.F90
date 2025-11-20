@@ -422,6 +422,283 @@ module compns_stochy_mod
       return
       end subroutine compns_stochy
 
+!>@brief The module 'compns_stochy_mod_land' sets (for land/sfc) the default namelist options reads in the stochastic physics namelist
+!! and  sets logicals and other parameters based on the namelist
+!>@details Namelist can be either a file, or an internal namelist
+      subroutine compns_stochy_land (me, sz_nml, input_nml_file, fn_nml, nlunit, deltim, n_var_lndp_tot, iret)
+            ! (me, deltim, iret, lndp_lscale_in, lndp_tau_in, stochini_in, iseed_lndp_in, ntrunc_in, lon_s_in, lat_s_in)
+
+
+!$$$  Subprogram Documentation Block
+!
+! Subprogram:  compns     Check and compute namelist frequencies
+!   Prgmmr: Iredell       Org: NP23          Date: 1999-01-26
+!
+! Abstract: This subprogram checks global spectral model namelist
+!           frequencies in hour units for validity.  If they are valid,
+!           then the frequencies are computed in timestep units.
+!           The following rules are applied:
+!             1. the timestep must be positive;
+!
+! Program History Log:
+!   2016-10-11  Phil Pegion  make the stochastic physics stand alone
+!   2024-12-01  Tseganeh ZG: add simplified land only function with number of perturbed vars not fixed at 6
+!
+! Usage:    call compns_stochy (me, sz_nml, input_nml_file, fn_nml, nlunit, deltim, iret)
+!   Input Arguments:
+!     deltim   - real timestep in seconds
+!   Output Arguments:
+!     iret     - integer return code (0 if successful or
+!                between 1 and 8 for which rule above was broken)
+!     stochy_namelist
+!
+! Attributes:
+!   Language: Fortran 90
+!
+!$$$
+
+
+      use stochy_namelist_def
+
+      implicit none
+
+      integer,              intent(out) :: iret
+      integer,              intent(in)  :: nlunit, me, sz_nml, n_var_lndp_tot
+      character(len=*),     intent(in)  :: input_nml_file(sz_nml)
+      character(len=64),    intent(in)  :: fn_nml
+      real,                 intent(in)  :: deltim
+      real tol,l_min
+      real :: rerth,circ,tmp_lat
+      integer k,ios
+      integer,parameter :: four=4
+
+! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+!
+      namelist /nam_stochy/ntrunc,lon_s,lat_s, sppt, sppt_tau, sppt_lscale,sppt_logit, &
+      iseed_shum,iseed_sppt,shum,shum_tau,&
+      shum_lscale,stochini,skeb_varspect_opt,sppt_sfclimit, &
+      skeb,skeb_tau,skeb_vdof,skeb_lscale,iseed_skeb,skeb_vfilt,skeb_diss_smooth, &
+      skeb_sigtop1,skeb_sigtop2,skebnorm,sppt_sigtop1,sppt_sigtop2,&
+      shum_sigefold,spptint,shumint,skebint,skeb_npass,use_zmtnblck,new_lscale, &
+      epbl,epbl_lscale,epbl_tau,iseed_epbl,                                    &
+      ocnsppt,ocnsppt_lscale,ocnsppt_tau,iseed_ocnsppt
+      
+      namelist /nam_sfcperts/lndp_type, lndp_var_list, lndp_prt_list, iseed_lndp, & 
+      lndp_tau, lndp_lscale 
+
+      rerth  =6.3712e+6      ! radius of earth (m)
+      tol=0.01  ! tolerance for calculations
+!     spectral resolution defintion
+      ntrunc=-999
+      lon_s=-999
+      lat_s=-999
+      ! can specify up to 5 values for the stochastic physics parameters
+      ! (each is an array of length 5)
+      sppt             = -999.  ! stochastic physics tendency amplitude
+      shum             = -999.  ! stochastic boundary layer spf hum amp
+      skeb             = -999.  ! stochastic KE backscatter amplitude
+      lndp_var_list  = 'XXX'
+      lndp_prt_list  = -999.
+! logicals
+      do_sppt = .false.
+      use_zmtnblck = .false.
+      new_lscale = .false.
+      do_shum = .false.
+      do_skeb = .false.
+
+      lndp_type = 0 !
+      lndp_lscale  = -999.       ! length scales
+      lndp_tau     = -999.       ! time scales
+      iseed_lndp   = 0           ! random seeds (if 0 use system clock)
+! for SKEB random patterns.
+      skeb_vfilt       = 0
+      skebint          = 0
+      spptint          = 0
+      shumint          = 0
+      skeb_npass       = 11  ! number of passes of smoother for dissipation estiamte
+      sppt_tau         = -999.  ! time scales
+      shum_tau         = -999.
+      skeb_tau         = -999.
+      skeb_vdof        = 5 ! proxy for vertical correlation, 5 is close to 40 passes of the 1-2-1 filter in the GFS
+      skebnorm         = 0  ! 0 - random pattern is stream function, 1- pattern is kenorm, 2- pattern is vorticity
+      sppt_lscale      = -999.  ! length scales
+      shum_lscale      = -999.
+      skeb_lscale      = -999.
+      iseed_sppt       = 0      ! random seeds (if 0 use system clock)
+      iseed_shum       = 0
+      iseed_skeb       = 0
+! parameters to control vertical tapering of stochastic physics with
+! height
+      sppt_sigtop1 = 0.1
+      sppt_sigtop2 = 0.025
+      skeb_sigtop1 = 0.1
+      skeb_sigtop2 = 0.025
+      shum_sigefold = 0.2
+! reduce amplitude of sppt near surface (lowest 2 levels)
+      sppt_sfclimit = .false.
+! gaussian or power law variance spectrum for skeb (0: gaussian, 1:
+! power law). If power law, skeb_lscale interpreted as a power not a
+! length scale.
+      skeb_varspect_opt = 0
+      sppt_logit        = .false. ! logit transform for sppt to bounded interval [-1,+1]
+      stochini          = .false. ! true= read in pattern, false=initialize from seed
+
+#ifdef INTERNAL_FILE_NML
+      read(input_nml_file, nml=nam_stochy)
+#else
+      rewind (nlunit)
+      open (unit=nlunit, file=fn_nml, action='READ', status='OLD', iostat=ios)
+      read(nlunit,nam_stochy)
+#endif
+#ifdef INTERNAL_FILE_NML
+      read(input_nml_file, nml=nam_sfcperts)
+#else
+      rewind (nlunit)
+      open (unit=nlunit, file=fn_nml, action='READ', status='OLD', iostat=ios)
+      read(nlunit,nam_sfcperts)
+#endif
+
+      if (me == 0) then
+            print *,' in compns_stochy_land'
+      endif
+
+      if (n_var_lndp_tot > max_n_var_lndp) then 
+            print*, "Error! the input n_var_lndp_tot ", n_var_lndp_tot, " must not exceed the max value ", max_n_var_lndp
+            print*, ' land perturbation requested for too many parameters. increase max_n_var_lndp'
+            iret = 10 
+            return
+      endif
+      
+      lndp_type = 2
+      n_var_lndp = n_var_lndp_tot
+
+      do k =1, n_var_lndp                                          
+            lndp_prt_list(k) = 1.
+            lndp_var_list(k) = "stc" 
+      enddo
+
+!calculate ntrunc if not supplied
+     if (ntrunc .LT. 1) then  
+          if (me==0) print*,'ntrunc not supplied, calculating'
+          circ=2*3.1415928*rerth ! start with lengthscale that is circumference of the earth
+          l_min=circ
+
+          l_min=min(lndp_lscale(1),l_min)
+       !ntrunc=1.5*circ/l_min
+          ntrunc=circ/l_min
+          if (me==0) print*,'ntrunc calculated from l_min',l_min, ntrunc
+     endif
+     ! ensure lat_s is a mutiple of 4 with a reminader of two
+     ntrunc=INT((ntrunc+1)/four)*four+2
+     if (me==0) print*,'NOTE ntrunc adjusted for even nlats',ntrunc
+
+! set up gaussian grid for ntrunc if not already defined. 
+     if (lon_s.LT.1 .OR. lat_s.LT.1) then
+          lat_s=ntrunc*1.5+1
+          lon_s=lat_s*2+4
+! Grid needs to be larger since interpolation is bi-linear
+          lat_s=lat_s*2
+          lon_s=lon_s*2
+          if (me==0) print*,'gaussian grid not set, defining here',lon_s, lat_s
+     endif
+
+      if (me == 0) then
+            print *, 'land stochy'
+            print *, ' lndp_type : ', lndp_type
+            if (lndp_type .NE. 0) print *, ' n_var_lndp : ', n_var_lndp
+      endif
+
+      iret = 0
+
+      return
+
+! 
+!       integer,              intent(out) :: iret
+!       integer,              intent(in)  :: me
+!       real,                 intent(in)  :: deltim
+!       ! real(kind=kind_dbl_prec), intent(in) :: lndp_lscale_in, lndp_tau_in
+!       ! logical, optional,    intent(in)  :: stochini_in
+!       ! integer, optional,    intent(in)  :: iseed_lndp_in, ntrunc_in, lon_s_in, lat_s_in, 
+!       real :: tol, l_min
+!       real :: rerth, circ, tmp_lat
+!       integer :: k, ios
+!       integer,parameter :: four=4
+
+!       namelist /nam_sfcperts/lndp_lscale, lndp_tau, stochini, iseed_lndp, ntrunc, lon_s, lat_s 
+
+!       if (me == 0) then
+!             print *,' in compns_stochy_land'
+!       endif
+
+!       rerth  =6.3712e+6      ! radius of earth (m)
+!       tol=0.01  ! tolerance for calculations
+
+!       ! lndp_lscale  = -999.       ! length scales
+!       ! lndp_tau     = -999.       ! time scales
+!       lndp_lscale  = lndp_lscale_in
+!       lndp_tau     = lndp_tau_in  
+
+!       ! logicals
+!       new_lscale = .false.
+!       stochini   = .false. ! true= read in pattern, false=initialize from seed
+
+!       if (present(stochini_in)) then 
+!             stochini = stochini_in
+!       endif
+! !     spectral resolution defintion
+!       if (present(ntrunc_in)) then 
+!             ntrunc = ntrunc_in
+!       else
+!             ntrunc=-999
+!       endif
+!       if (present(lon_s_in)) then 
+!             lon_s = lon_s_in
+!       else
+!             lon_s=-999
+!       endif
+!       if (present(lat_s_in)) then 
+!             lat_s = lat_s_in
+!       else
+!             lat_s=-999
+!       endif
+!       if (present(iseed_lndp_in)) then 
+!             iseed_lndp = iseed_lndp_in
+!       else
+!             iseed_lndp = 0          ! random seeds (if 0 use system clock)
+!       endif
+
+
+! !calculate ntrunc if not supplied
+!      if (ntrunc .LT. 1) then  
+!           if (me==0) print*,'ntrunc not supplied, calculating'
+!           circ=2*3.1415928*rerth ! start with lengthscale that is circumference of the earth
+!           l_min=circ
+
+!           l_min=min(lndp_lscale(1),l_min)
+!        !ntrunc=1.5*circ/l_min
+!           ntrunc=circ/l_min
+!           if (me==0) print*,'ntrunc calculated from l_min',l_min, ntrunc
+!      endif
+!      ! ensure lat_s is a mutiple of 4 with a reminader of two
+!      ntrunc=INT((ntrunc+1)/four)*four+2
+!      if (me==0) print*,'NOTE ntrunc adjusted for even nlats',ntrunc
+
+! ! set up gaussian grid for ntrunc if not already defined. 
+!      if (lon_s.LT.1 .OR. lat_s.LT.1) then
+!           lat_s=ntrunc*1.5+1
+!           lon_s=lat_s*2+4
+! ! Grid needs to be larger since interpolation is bi-linear
+!           lat_s=lat_s*2
+!           lon_s=lon_s*2
+!           if (me==0) print*,'gaussian grid not set, defining here',lon_s,lat_s
+!      endif
+
+!       iret = 0
+
+!       return
+
+      end subroutine compns_stochy_land
+
       subroutine compns_stochy_ocn (deltim,iret)
 !$$$  Subprogram Documentation Block
 !
