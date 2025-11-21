@@ -8,7 +8,7 @@
     !use mpp_domains
     use mpp_mod,             only: mpp_set_current_pelist,mpp_get_current_pelist,mpp_init,mpp_pe,mpp_npes ,mpp_declare_pelist,mpp_root_pe
     use mpp_domains_mod,     only: mpp_broadcast_domain,MPP_DOMAIN_TIME,mpp_domains_init ,mpp_domains_set_stack_size
-    use fms_mod,             only:  fms_init
+    use fms_mod,             only: fms_init
     use xgrid_mod,           only: grid_box_type
     use netcdf
     use kinddef,             only : kind_dbl_prec,kind_phys
@@ -201,25 +201,7 @@
     if (myrank==0) PRINT*," running GenEnsForc RANK WITH", NPROCS, "TASKS"
     ! PRINT*," running GenEnsForc  RANK ", MYRANK, " WITH ", NPROCS, "TASKS"
 
-    ! define stuff
-    ! pi=3.14159265359
-    ! undef=9.99e+20
-    ! p1000=100000.0
-
-    ! !define mid-layer pressure
-    ! rd=287.0
-    ! cp=1004.0
-    ! DO k=1,nlevs
-    !     pressi(k)=ak(k)+p1000*bk(k)
-    ! ENDDO
-    ! ex3d=cp*(pressi/p1000)**(rd/cp)
-    ! DO k=1,nlevs
-    !     exn = (ex3d(k)*pressi(k)-ex3d(k+1)*pressi(k+1))/((cp+rd)*(pressi(k)-pressi(k+1)))
-    !     pressl(k)=p1000*exn**(cp/rd)
-    ! ENDDO 
-
     ! PRINT*,"READING NAMELIST."
-    ! CALL BAOPENR(360, "tiles_to_vector.nml", IERR)             !"snowDA.nml"   !
     open(360, file="generate_ens_forc_state.nml", form="formatted")
     read(360, NAMENS)
     close(360)    
@@ -287,10 +269,8 @@
                            tile_group(ixy+1), IERR)
          call MPI_Comm_create(MPI_COMM_WORLD, tile_group(ixy+1), comm_tile(ixy+1), IERR)
     enddo    
-    ! call MPI_Group_incl(group_world, NUM_TILES, tile_members(1,:), tile_group(1), IERR)
-    ! call MPI_Group_incl(group_world, NUM_TILES, tile_members(2,:), tile_group(2), IERR)     
+    ! call MPI_Group_incl(group_world, NUM_TILES, tile_members(1,:), tile_group(1), IERR)   
     ! call MPI_Comm_create(MPI_COMM_WORLD, tile_group(1), comm_tile(1), IERR)
-    ! call MPI_Comm_create(MPI_COMM_WORLD, tile_group(2), comm_tile(2), IERR)
     if(myrank==0) print*, "Proc ",myrank, " done creating new tile group and comm"
     
     do ixy = 1, Np_til 
