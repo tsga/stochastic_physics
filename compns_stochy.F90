@@ -483,7 +483,7 @@ module compns_stochy_mod
       epbl,epbl_lscale,epbl_tau,iseed_epbl,                                    &
       ocnsppt,ocnsppt_lscale,ocnsppt_tau,iseed_ocnsppt
       
-      namelist /nam_sfcperts/lndp_type, lndp_var_list, lndp_prt_list, iseed_lndp, & 
+      namelist /nam_sfcperts/lndp_type, lndp_model_type, lndp_var_list, lndp_prt_list, iseed_lndp, & 
       lndp_tau, lndp_lscale 
 
       rerth  =6.3712e+6      ! radius of earth (m)
@@ -605,6 +605,7 @@ module compns_stochy_mod
       if (me == 0) then
             print *, 'land stochy'
             print *, ' lndp_type : ', lndp_type
+            print *, ' lndp_model_type : ', lndp_model_type
             if (lndp_type .NE. 0) print *, ' n_var_lndp : ', n_var_lndp
       endif
 
