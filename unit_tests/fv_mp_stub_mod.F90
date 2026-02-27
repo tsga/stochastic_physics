@@ -323,8 +323,8 @@ contains
             if ( npes_x==npes_y .and. (npx-1)==((npx-1)/npes_x)*npes_x )  square_domain = .true.
 
             if ( (npx/npes_x < ng) .or. (npy/npes_y < ng) ) then
-               write(*,310) npes_x, npes_y, npx/npes_x, npy/npes_y
  310           format('Invalid layout, NPES_X:',i4.4,'NPES_Y:',i4.4,'ncells_X:',i4.4,'ncells_Y:',i4.4)
+               write(*,310) npes_x, npes_y, npx/npes_x, npy/npes_y
                call mp_stop
                call exit(1)
             endif
